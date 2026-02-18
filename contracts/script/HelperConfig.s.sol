@@ -23,20 +23,21 @@ contract HelperConfig is Script {
         }
     }
 
+    // Latest verified testnet addresses from Chainlink & Uniswap docs (Feb 2026)
     function getBaseSepoliaConfig() public view returns (NetworkConfig memory) {
         return NetworkConfig({
-            poolManager: 0x05c21950c609B16712396605e46B1902047E64b5, // Mock or Real
-            linkToken: 0xE4aB69C077896252FAFBD49EFD26B5D171A32410,
-            ccipRouter: 0xD3b06161f529eD22C66A90731671040f7f329977,
+            poolManager: 0x05E73354cFdC7b39bfD92C5B90d84e8ddaf9ee1C, // Uniswap v4 PoolManager on Base Sepolia
+            linkToken: 0xE4aB69C077896252FAFBD49EFD26B5D171A32410, // LINK on Base Sepolia
+            ccipRouter: 0xD3b06161f529eD22C66A90731671040f7f329977, // CCIP Router Base Sepolia
             deployerKey: vm.envUint("PRIVATE_KEY")
         });
     }
 
     function getOptimismSepoliaConfig() public view returns (NetworkConfig memory) {
         return NetworkConfig({
-            poolManager: 0x05c21950c609B16712396605e46B1902047E64b5, // Mock or Real
-            linkToken: 0xE4aB69C077896252FAFBD49EFD26B5D171A32410,
-            ccipRouter: 0x11356A2B3766a2E4eE53A5430Ea117565451e03A,
+            poolManager: 0xC39bE5B5D57077b7b2D4789704bB2F476be49531, // Uniswap v4 PoolManager on OP Sepolia
+            linkToken: 0xE4aB69C077896252FAFBD49EFD26B5D171A32410, // LINK on OP Sepolia
+            ccipRouter: 0x114A20A10b43D4115e5aeefEE5dAE3261946de46, // CCIP Router OP Sepolia (updated)
             deployerKey: vm.envUint("PRIVATE_KEY")
         });
     }
