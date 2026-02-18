@@ -1,0 +1,65 @@
+{
+  "name": "liquidmind-ai",
+  "version": "0.1.0",
+  "description": "LIQUIDMIND - Intelligent Liquidity, Autonomous Execution. AI agents for cross-chain DeFi management.",
+  "private": true,
+  "workspaces": [
+    "contracts",
+    "cre-workflow",
+    "agents",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:contracts && npm run install:cre && npm run install:agents && npm run install:frontend",
+    "install:contracts": "cd contracts && forge install",
+    "install:cre": "cd cre-workflow && npm install",
+    "install:agents": "cd agents && npm install",
+    "install:frontend": "cd frontend && npm install",
+    "test": "npm run test:contracts && npm run test:cre && npm run test:agents",
+    "test:contracts": "cd contracts && forge test",
+    "test:cre": "cd cre-workflow && npm test",
+    "test:agents": "cd agents && npm test",
+    "build": "npm run build:cre && npm run build:agents && npm run build:frontend",
+    "build:cre": "cd cre-workflow && npm run build",
+    "build:agents": "cd agents && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "dev": "concurrently \"npm run dev:agents\" \"npm run dev:frontend\"",
+    "dev:agents": "cd agents && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "deploy:testnet": "npm run deploy:contracts:testnet && npm run deploy:cre:testnet",
+    "deploy:contracts:testnet": "cd contracts && forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC --broadcast",
+    "deploy:cre:testnet": "cd cre-workflow && npm run deploy",
+    "lint": "npm run lint:contracts && npm run lint:ts",
+    "lint:contracts": "cd contracts && forge fmt --check",
+    "lint:ts": "eslint . --ext .ts,.tsx",
+    "format": "npm run format:contracts && npm run format:ts",
+    "format:contracts": "cd contracts && forge fmt",
+    "format:ts": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hebx/liquidmind-ai.git"
+  },
+  "keywords": [
+    "defi",
+    "ai-agents",
+    "chainlink",
+    "cre",
+    "x402",
+    "uniswap-v4",
+    "cross-chain",
+    "liquidity-management"
+  ],
+  "author": "Hebx",
+  "license": "MIT"
+}
