@@ -1,3 +1,6 @@
+# Dependencies
+lib/
+
 # Compiler files
 cache/
 out/
