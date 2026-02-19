@@ -83,24 +83,13 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
     IRouterClient private s_router;
     LinkTokenInterface private s_linkToken;
     
-    // Chain ID => Hook address mapping
     mapping(uint256 => address) public chainHooks;
-    
-    // Agent address => Config
     mapping(address => AgentConfig) public agents;
-    
-    // Message ID => processed
     mapping(bytes32 => bool) public processedMessages;
-    
-    // Command ID => Command
     mapping(bytes32 => CrossChainCommand) public commands;
     
-    // Local hook reference
     address public localHook;
-    
-    // Supported chains
     mapping(uint256 => bool) public supportedChains;
-    
     uint256 public constant COMMAND_VALIDITY = 1 hours;
     uint256 public agentCount;
 
@@ -130,48 +119,30 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
         address receiver = chainHooks[destinationChainSelector];
         require(receiver != address(0), InvalidReceiverAddress());
 
-        // Create command structure
         bytes32 commandId = keccak256(
-            abi.encodePacked(
-                msg.sender,
-                destinationChainSelector,
-                block.timestamp,
-                payload
-            )
+            abi.encodePacked(msg.sender, destinationChainSelector, block.timestamp, payload)
         );
 
-        // Encode message for CCIP
-        bytes memory data = abi.encode(
-            commandId,
-            commandType,
-            msg.sender,
-            payload
-        );
+        bytes memory data = abi.encode(commandId, commandType, msg.sender, payload);
 
-        // Create CCIP message
         Client.EVM2AnyMessage memory evm2AnyMessage = Client.EVM2AnyMessage({
             receiver: abi.encode(receiver),
             data: data,
             tokenAmounts: new Client.EVMTokenAmount[](0),
-            extraArgs: Client._argsToBytes(
-                Client.EVMExtraArgsV1({gasLimit: 500_000})
-            ),
+            extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 500_000})),
             feeToken: address(s_linkToken)
         });
 
-        // Get fee and check balance
-        uint256 fees = s_router.getFee(destinationChainSelector, evm2AnyMessage);
+        uint256 fees = s_router.getFee(uint64(destinationChainSelector), evm2AnyMessage);
         uint256 currentBalance = s_linkToken.balanceOf(address(this));
         
         if (fees > currentBalance) {
             revert NotEnoughBalance(currentBalance, fees);
         }
 
-        // Approve and send
         s_linkToken.approve(address(s_router), fees);
-        messageId = s_router.ccipSend(destinationChainSelector, evm2AnyMessage);
+        messageId = s_router.ccipSend(uint64(destinationChainSelector), evm2AnyMessage);
 
-        // Store command
         commands[commandId] = CrossChainCommand({
             commandId: commandId,
             commandType: commandType,
@@ -182,57 +153,29 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
             executed: false
         });
 
-        emit MessageSent(
-            messageId,
-            destinationChainSelector,
-            receiver,
-            data,
-            address(s_linkToken),
-            fees
-        );
-        
+        emit MessageSent(messageId, destinationChainSelector, receiver, data, address(s_linkToken), fees);
         emit LiquidityCommandSent(destinationChainSelector, commandId, commandType);
 
-        // Update agent activity
         agents[msg.sender].lastActivity = block.timestamp;
     }
 
-    function _ccipReceive(
-        Client.Any2EVMMessage memory any2EvmMessage
-    ) internal override {
+    function _ccipReceive(Client.Any2EVMMessage memory any2EvmMessage) internal override {
         bytes32 messageId = any2EvmMessage.messageId;
-        
         require(!processedMessages[messageId], MessageAlreadyProcessed(messageId));
         processedMessages[messageId] = true;
 
         uint256 sourceChainSelector = any2EvmMessage.sourceChainSelector;
         address sender = abi.decode(any2EvmMessage.sender, (address));
 
-        emit MessageReceived(
-            messageId,
-            sourceChainSelector,
-            sender,
-            any2EvmMessage.data
-        );
+        emit MessageReceived(messageId, sourceChainSelector, sender, any2EvmMessage.data);
 
-        // Decode and process message
-        (
-            bytes32 commandId,
-            string memory commandType,
-            address originAgent,
-            bytes memory payload
-        ) = abi.decode(any2EvmMessage.data, (bytes32, string, address, bytes));
+        (bytes32 commandId, string memory commandType, address originAgent, bytes memory payload) = 
+            abi.decode(any2EvmMessage.data, (bytes32, string, address, bytes));
 
-        // Forward to local hook
         if (localHook != address(0)) {
-            IAgenticLiquidityHook(localHook).receiveCrossChainSignal(
-                sourceChainSelector,
-                commandId,
-                payload
-            );
+            IAgenticLiquidityHook(localHook).receiveCrossChainSignal(sourceChainSelector, commandId, payload);
         }
 
-        // Mark command as executed
         if (commands[commandId].timestamp != 0) {
             commands[commandId].executed = true;
         }
@@ -241,20 +184,13 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
     // ============ Agent Management ============
     function registerAgent(address agent) external onlyOwner {
         require(!agents[agent].isAuthorized, "Agent already registered");
-        
-        agents[agent] = AgentConfig({
-            isAuthorized: true,
-            reputation: 100, // Initial reputation
-            lastActivity: block.timestamp
-        });
-        
+        agents[agent] = AgentConfig({isAuthorized: true, reputation: 100, lastActivity: block.timestamp});
         agentCount++;
         emit AgentRegistered(agent, true);
     }
 
     function revokeAgent(address agent) external onlyOwner {
         require(agents[agent].isAuthorized, "Agent not registered");
-        
         agents[agent].isAuthorized = false;
         agentCount--;
         emit AgentRegistered(agent, false);
@@ -290,7 +226,6 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
     function withdrawEth(address beneficiary) public onlyOwner {
         uint256 amount = address(this).balance;
         if (amount == 0) revert NothingToWithdraw();
-        
         (bool sent, ) = beneficiary.call{value: amount}("");
         if (!sent) revert FailedToWithdrawEth(msg.sender, beneficiary, amount);
     }
@@ -311,10 +246,9 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
         return block.timestamp <= cmd.timestamp + COMMAND_VALIDITY;
     }
 
-    function getRouter() external view returns (address) {
+    function getRouter() public view override returns (address) {
         return address(s_router);
     }
 
-    // ============ Receive ============
     receive() external payable {}
 }

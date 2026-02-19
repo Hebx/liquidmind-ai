@@ -1,106 +1,126 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.26;
+pragma solidity ^0.8.24;
 
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
-import {Hooks} from "v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/src/types/BeforeSwapDelta.sol";
-import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/src/types/BalanceDelta.sol";
-import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
+import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
+import {BeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "v4-core/src/types/PoolOperation.sol";
 
+/**
+ * @title BaseHook
+ * @notice Abstract base contract for Uniswap v4 hooks
+ */
 abstract contract BaseHook is IHooks {
-    using PoolIdLibrary for PoolKey;
+    IPoolManager public immutable poolManager;
 
-    IPoolManager public immutable manager;
+    error NotPoolManager();
+    error HookNotImplemented();
 
-    error NotManager();
-    error NotSelf();
-    error InvalidHookResponse();
-
-    constructor(IPoolManager _manager) {
-        manager = _manager;
+    constructor(IPoolManager _poolManager) {
+        poolManager = _poolManager;
     }
 
     modifier onlyPoolManager() {
-        if (msg.sender != address(manager)) revert NotManager();
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
         _;
     }
 
-    modifier onlySelf() {
-        if (msg.sender != address(this)) revert NotSelf();
-        _;
-    }
-
-    function getHookPermissions() public virtual pure returns (Hooks.Permissions memory);
-
-    function beforeInitialize(address, PoolKey calldata, uint160) external virtual returns (bytes4) {
-        return BaseHook.beforeInitialize.selector;
-    }
-
-    function afterInitialize(address, PoolKey calldata, uint160, int24) external virtual returns (bytes4) {
-        return BaseHook.afterInitialize.selector;
-    }
-
-    function beforeAddLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
+    function beforeInitialize(address sender, PoolKey calldata key, uint160 sqrtPriceX96)
         external
         virtual
+        onlyPoolManager
         returns (bytes4)
     {
-        return BaseHook.beforeAddLiquidity.selector;
+        revert HookNotImplemented();
+    }
+
+    function afterInitialize(address sender, PoolKey calldata key, uint160 sqrtPriceX96, int24 tick)
+        external
+        virtual
+        onlyPoolManager
+        returns (bytes4)
+    {
+        revert HookNotImplemented();
+    }
+
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4) {
+        revert HookNotImplemented();
     }
 
     function afterAddLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
-        BalanceDelta,
-        bytes calldata
-    ) external virtual returns (bytes4, BalanceDelta) {
-        return (BaseHook.afterAddLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4, BalanceDelta) {
+        revert HookNotImplemented();
     }
 
-    function beforeRemoveLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
-        external
-        virtual
-        returns (bytes4)
-    {
-        return BaseHook.beforeRemoveLiquidity.selector;
+    function beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4) {
+        revert HookNotImplemented();
     }
 
     function afterRemoveLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        BalanceDelta,
-        BalanceDelta,
-        bytes calldata
-    ) external virtual returns (bytes4, BalanceDelta) {
-        return (BaseHook.afterRemoveLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4, BalanceDelta) {
+        revert HookNotImplemented();
     }
 
-    function beforeSwap(address, PoolKey calldata, IPoolManager.SwapParams calldata, bytes calldata)
-        external
-        virtual
-        returns (bytes4, BeforeSwapDelta, uint24)
-    {
-        return (BaseHook.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+    function beforeSwap(
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24) {
+        revert HookNotImplemented();
     }
 
-    function afterSwap(address, PoolKey calldata, IPoolManager.SwapParams calldata, BalanceDelta, bytes calldata)
-        external
-        virtual
-        returns (bytes4, int128)
-    {
-        return (BaseHook.afterSwap.selector, 0);
+    function afterSwap(
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4, int128) {
+        revert HookNotImplemented();
     }
 
-    function beforeDonate(address, PoolKey calldata, uint256, uint256, bytes calldata) external virtual returns (bytes4) {
-        return BaseHook.beforeDonate.selector;
+    function beforeDonate(
+        address sender,
+        PoolKey calldata key,
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4) {
+        revert HookNotImplemented();
     }
 
-    function afterDonate(address, PoolKey calldata, uint256, uint256, bytes calldata) external virtual returns (bytes4) {
-        return BaseHook.afterDonate.selector;
+    function afterDonate(
+        address sender,
+        PoolKey calldata key,
+        uint256 amount0,
+        uint256 amount1,
+        bytes calldata hookData
+    ) external virtual onlyPoolManager returns (bytes4) {
+        revert HookNotImplemented();
     }
 }

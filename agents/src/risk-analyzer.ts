@@ -50,11 +50,11 @@ export class RiskAnalyzer {
 
     // Determine risk level
     let riskLevel: ILRiskAssessment['riskLevel'];
-    if (ilAbsolute < 0.005) {
+    if (ilAbsolute < 0.02) {
       riskLevel = 'low';
-    } else if (ilAbsolute < 0.02) {
+    } else if (ilAbsolute < 0.10) {
       riskLevel = 'medium';
-    } else if (ilAbsolute < 0.05) {
+    } else if (ilAbsolute < 0.25) {
       riskLevel = 'high';
     } else {
       riskLevel = 'extreme';
@@ -318,7 +318,11 @@ export class RiskAnalyzer {
   private calculateReturns(prices: number[]): number[] {
     const returns: number[] = [];
     for (let i = 1; i < prices.length; i++) {
-      returns.push(Math.log(prices[i] / prices[i - 1]));
+      const currentPrice = prices[i];
+      const prevPrice = prices[i - 1];
+      if (currentPrice !== undefined && prevPrice !== undefined && prevPrice !== 0) {
+        returns.push(Math.log(currentPrice / prevPrice));
+      }
     }
     return returns;
   }

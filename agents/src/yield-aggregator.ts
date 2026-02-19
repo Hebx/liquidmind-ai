@@ -1,9 +1,9 @@
 import {
   YieldOpportunity,
+  YieldStatus,
   YieldComparison,
-  YieldAggregationRequest,
-  Token,
   LiquidityPool,
+  Token,
   A2AMessage,
   TaskResult,
   RewardToken,
@@ -12,20 +12,23 @@ import {
 /**
  * Yield Aggregator Agent
  * 
- * Fetches and aggregates yield data from multiple DeFi protocols on Hedera.
- * Provides normalized yield comparisons and opportunity discovery.
+ * Monitors and aggregates yield opportunities across Hedera DEX protocols.
+ * Compares APYs, TVL, and reward structures to find best deployment targets.
  */
 
 export class YieldAggregator {
-  private opportunities: Map<string, YieldOpportunity> = new Map();
+  private yieldCache: YieldOpportunity[] = [];
   private tokenPrices: Map<string, number> = new Map();
-  private protocols: string[] = ['SaucerSwap', 'Pangolin', 'HeliSwap'];
+  private lastUpdate: number = 0;
   private agentId: string = 'yield-aggregator';
 
-  constructor(private config: YieldAggregatorConfig) {}
+  constructor(
+    private config: YieldAggregatorConfig,
+    private protocols: string[] = ['SaucerSwap', 'Pangolin', 'HeliSwap']
+  ) {}
 
   /**
-   * Initialize and start data fetching
+   * Initialize the aggregator
    */
   async initialize(): Promise<void> {
     await this.fetchAllYields();
@@ -33,149 +36,46 @@ export class YieldAggregator {
   }
 
   /**
-   * Get yield opportunities for a specific token
+   * Fetch yields from all configured protocols
    */
-  async getYieldOpportunities(
-    request: YieldAggregationRequest
-  ): Promise<YieldComparison> {
-    const { token, minApy, maxRisk, excludeProtocols } = request;
-
-    // Refresh if data is stale
-    if (this.isDataStale()) {
-      await this.fetchAllYields();
+  async fetchAllYields(): Promise<YieldStatus> {
+    const allOpportunities: YieldOpportunity[] = [];
+    
+    for (const protocol of this.protocols) {
+      try {
+        const opps = await this.fetchProtocolYields(protocol);
+        allOpportunities.push(...opps);
+      } catch (error) {
+        console.error(`Error fetching yields for ${protocol}:`, error);
+      }
     }
 
-    // Filter opportunities
-    let filtered = Array.from(this.opportunities.values()).filter((opp) => {
-      const hasToken =
-        opp.pool.tokenA.address === token.address ||
-        opp.pool.tokenB.address === token.address;
-      const meetsMinApy = minApy === undefined || opp.apy >= minApy;
-      const notExcluded =
-        !excludeProtocols || !excludeProtocols.includes(opp.protocol);
+    this.yieldCache = allOpportunities;
+    this.lastUpdate = Date.now();
+    this.emitYieldUpdated(allOpportunities.length);
 
-      return hasToken && meetsMinApy && notExcluded;
-    });
+    if (allOpportunities.length === 0) {
+        return {
+            opportunities: [],
+            bestApy: undefined as any,
+            timestamp: this.lastUpdate,
+        };
+    }
 
-    // Sort by APY descending
-    filtered.sort((a, b) => b.apy - a.apy);
-
-    const bestApy = filtered[0];
-    const bestRiskAdjusted = this.findBestRiskAdjusted(filtered);
+    const sorted = [...allOpportunities].sort((a, b) => b.apy - a.apy);
+    const bestApy = sorted[0]!;
 
     return {
-      opportunities: filtered,
+      opportunities: allOpportunities,
       bestApy,
-      bestRiskAdjusted,
-      timestamp: Date.now(),
+      timestamp: this.lastUpdate,
     };
   }
 
   /**
-   * Get all yield opportunities across protocols
+   * Fetch yields for a specific protocol
    */
-  async getAllOpportunities(): Promise<YieldOpportunity[]> {
-    if (this.isDataStale()) {
-      await this.fetchAllYields();
-    }
-    return Array.from(this.opportunities.values()).sort((a, b) => b.apy - a.apy);
-  }
-
-  /**
-   * Calculate total APY including reward tokens
-   */
-  calculateTotalApy(opportunity: YieldOpportunity): number {
-    let totalApy = opportunity.apy;
-
-    // Add reward token yields
-    for (const reward of opportunity.rewards) {
-      const rewardValue = reward.valuePerDay * 365;
-      const rewardApy = rewardValue / Number(opportunity.pool.tvl);
-      totalApy += rewardApy;
-    }
-
-    // Account for fees
-    totalApy -= opportunity.depositFee + opportunity.withdrawalFee;
-
-    return totalApy;
-  }
-
-  /**
-   * Handle incoming A2A messages
-   */
-  async handleTask(message: A2AMessage): Promise<TaskResult> {
-    const taskType = (message.payload as any).taskType;
-    const params = (message.payload as any).params;
-
-    try {
-      switch (taskType) {
-        case 'aggregate-yield':
-          const comparison = await this.getYieldOpportunities(
-            params as YieldAggregationRequest
-          );
-          return {
-            taskId: (message.payload as any).taskId,
-            status: 'success',
-            data: comparison,
-            completedAt: Date.now(),
-          };
-
-        case 'fetch-prices':
-          const prices = await this.fetchTokenPrices(params.tokens);
-          return {
-            taskId: (message.payload as any).taskId,
-            status: 'success',
-            data: prices,
-            completedAt: Date.now(),
-          };
-
-        default:
-          return {
-            taskId: (message.payload as any).taskId,
-            status: 'failure',
-            data: null,
-            error: `Unknown task type: ${taskType}`,
-            completedAt: Date.now(),
-          };
-      }
-    } catch (error) {
-      return {
-        taskId: (message.payload as any).taskId,
-        status: 'failure',
-        data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        completedAt: Date.now(),
-      };
-    }
-  }
-
-  // Private methods
-
-  private async fetchAllYields(): Promise<void> {
-    const allOpportunities: YieldOpportunity[] = [];
-
-    for (const protocol of this.protocols) {
-      try {
-        const opportunities = await this.fetchProtocolYields(protocol);
-        allOpportunities.push(...opportunities);
-      } catch (error) {
-        console.error(`Failed to fetch yields from ${protocol}:`, error);
-      }
-    }
-
-    // Update opportunities map
-    this.opportunities.clear();
-    for (const opp of allOpportunities) {
-      this.opportunities.set(opp.id, opp);
-    }
-
-    this.lastUpdate = Date.now();
-
-    // Emit yield updated event
-    this.emitYieldUpdated(allOpportunities.length);
-  }
-
-  private async fetchProtocolYields(protocol: string): Promise<YieldOpportunity[]> {
+  async fetchProtocolYields(protocol: string): Promise<YieldOpportunity[]> {
     switch (protocol) {
       case 'SaucerSwap':
         return this.fetchSaucerSwapYields();
@@ -189,26 +89,28 @@ export class YieldAggregator {
   }
 
   private async fetchSaucerSwapYields(): Promise<YieldOpportunity[]> {
-    const response = await fetch(`${this.config.saucerSwapApi}/pools`);
-    const pools: SaucerSwapPool[] = await response.json();
+    try {
+      const response = await fetch(`${this.config.saucerSwapApi}/pools`);
+      const data = await response.json();
+      const pools = Array.isArray(data) ? data : [];
 
-    return pools.map((pool) => this.transformSaucerSwapPool(pool));
+      return pools.map((pool: SaucerSwapPool) => this.transformSaucerSwapPool(pool));
+    } catch (error) {
+      console.error('Error fetching SaucerSwap yields:', error);
+      return [];
+    }
   }
 
   private async fetchPangolinYields(): Promise<YieldOpportunity[]> {
-    // Placeholder for Pangolin integration
     return [];
   }
 
   private async fetchHeliSwapYields(): Promise<YieldOpportunity[]> {
-    // Placeholder for HeliSwap integration
     return [];
   }
 
   private transformSaucerSwapPool(pool: SaucerSwapPool): YieldOpportunity {
     const id = `saucerswap-${pool.id}`;
-
-    // Calculate APY from fee APR and rewards
     const feeApr = this.calculateFeeApr(pool);
     const rewardApr = this.calculateRewardApr(pool);
     const totalApy = (1 + feeApr) * (1 + rewardApr) - 1;
@@ -223,7 +125,7 @@ export class YieldAggregator {
           symbol: pool.token0.symbol,
           decimals: pool.token0.decimals,
           name: pool.token0.symbol,
-          chainId: 295, // Hedera mainnet
+          chainId: 295,
         },
         tokenB: {
           address: pool.token1.address,
@@ -232,19 +134,19 @@ export class YieldAggregator {
           name: pool.token1.symbol,
           chainId: 295,
         },
-        reserveA: BigInt(pool.liquidity.toString()), // Simplified
-        reserveB: BigInt(pool.liquidity.toString()),
-        totalSupply: BigInt(pool.liquidity.toString()),
+        reserveA: BigInt(pool.liquidity),
+        reserveB: BigInt(pool.liquidity),
+        totalSupply: BigInt(pool.liquidity),
         feeTier: pool.fee,
         protocol: 'SaucerSwap',
         apr: feeApr,
         tvl: this.estimateTvl(pool),
-        volume24h: BigInt(0), // Would need separate API call
+        volume24h: BigInt(0),
       },
       apy: totalApy,
       tvl: this.estimateTvl(pool),
       rewards: this.extractRewards(pool),
-      lockupPeriod: 0, // SaucerSwap has no lockup
+      lockupPeriod: 0,
       depositFee: 0,
       withdrawalFee: 0,
       harvestFee: 0,
@@ -253,86 +155,124 @@ export class YieldAggregator {
   }
 
   private calculateFeeApr(pool: SaucerSwapPool): number {
-    // Simplified calculation - in production would use actual volume data
     const feeRate = pool.fee / 10000;
-    // Estimate based on typical DEX turnover
-    const estimatedTurnover = 0.1; // 10% daily
+    const estimatedTurnover = 0.1;
     return feeRate * estimatedTurnover * 365;
   }
 
   private calculateRewardApr(pool: SaucerSwapPool): number {
-    // Would fetch actual reward emissions
-    // Placeholder - SaucerSwap has SAUCE rewards
-    return 0.05; // 5% estimated
+    return 0.05;
   }
 
   private estimateTvl(pool: SaucerSwapPool): bigint {
-    // Estimate TVL from liquidity and price
-    // Simplified - would need actual token prices
-    return BigInt(pool.liquidity.toString()) * BigInt(2);
+    return BigInt(pool.liquidity) * BigInt(2);
   }
 
   private extractRewards(pool: SaucerSwapPool): RewardToken[] {
-    // Would extract actual reward tokens from protocol
-    // Placeholder for SAUCE rewards
     return [
       {
         token: {
-          address: '0.0.1463300', // SAUCE token
+          address: '0.0.1463300',
           symbol: 'SAUCE',
           decimals: 6,
           name: 'SAUCE',
           chainId: 295,
         },
-        dailyEmission: BigInt(10000000000), // Placeholder
-        valuePerDay: 1000, // Placeholder
+        dailyEmission: BigInt(10000000000),
+        valuePerDay: 1000,
       },
     ];
   }
 
-  private findBestRiskAdjusted(opportunities: YieldOpportunity[]): YieldOpportunity {
-    // Simple risk adjustment: APY * (TVL factor)
-    // Higher TVL = lower risk
-    const scored = opportunities.map((opp) => ({
-      opp,
-      score: opp.apy * Math.min(1, Math.log10(Number(opp.tvl) + 1) / 6),
-    }));
+  /**
+   * Compare opportunities across protocols
+   */
+  compareOpportunities(opportunities: YieldOpportunity[]): YieldComparison {
+    if (opportunities.length === 0) {
+        throw new Error("No opportunities to compare");
+    }
+    const sorted = [...opportunities].sort((a, b) => b.apy - a.apy);
+    const bestApy = sorted[0]!;
+
+    return {
+      opportunities: sorted,
+      bestApy,
+      averageApy: opportunities.reduce((acc, curr) => acc + curr.apy, 0) / opportunities.length,
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Score an opportunity based on yield and risk
+   */
+  scoreOpportunity(opportunity: YieldOpportunity, riskScore: number): number {
+    return opportunity.apy / (riskScore + 1);
+  }
+
+  /**
+   * Select the best opportunity based on risk-adjusted return
+   */
+  selectBest(opportunities: YieldOpportunity[], riskScores: Record<string, number>): YieldOpportunity {
+    if (opportunities.length === 0) {
+        throw new Error("No opportunities to select from");
+    }
+    const scored = opportunities.map((opp) => {
+      const risk = riskScores[opp.pool.address] !== undefined ? riskScores[opp.pool.address]! : 50;
+      const score = this.scoreOpportunity(opp, risk);
+      console.log(`Opp ${opp.id}: APY=${opp.apy}, Risk=${risk}, Score=${score}`);
+      return { opp, score };
+    });
 
     scored.sort((a, b) => b.score - a.score);
-    return scored[0]?.opp || opportunities[0];
+    return scored[0]?.opp || opportunities[0]!;
   }
 
-  private async fetchTokenPrices(tokens: Token[]): Promise<Map<string, number>> {
-    const prices = new Map<string, number>();
+  /**
+   * Handle incoming A2A messages
+   */
+  async handleTask(message: A2AMessage): Promise<TaskResult> {
+    const payload = message.payload as any;
+    const taskType = payload.taskType;
+    const params = payload.params;
 
-    for (const token of tokens) {
-      const price = await this.fetchTokenPrice(token);
-      prices.set(token.address, price);
+    try {
+      switch (taskType) {
+        case 'fetch-yields':
+          const result = await this.fetchAllYields();
+          return {
+            taskId: payload.taskId,
+            status: 'success',
+            data: result,
+            completedAt: Date.now(),
+          };
+
+        case 'compare-yields':
+          const comparison = this.compareOpportunities(params.opportunities);
+          return {
+            taskId: payload.taskId,
+            status: 'success',
+            data: comparison,
+            completedAt: Date.now(),
+          };
+
+        default:
+          return {
+            taskId: payload.taskId,
+            status: 'failure',
+            data: null,
+            error: `Unknown task type: ${taskType}`,
+            completedAt: Date.now(),
+          };
+      }
+    } catch (error) {
+      return {
+        taskId: payload.taskId,
+        status: 'failure',
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        completedAt: Date.now(),
+      };
     }
-
-    return prices;
-  }
-
-  private async fetchTokenPrice(token: Token): Promise<number> {
-    // Check cache first
-    const cached = this.tokenPrices.get(token.address);
-    if (cached && Date.now() - this.lastUpdate < 300000) {
-      // 5 min cache
-      return cached;
-    }
-
-    // In production, fetch from price oracle
-    // For now, return mock prices for known tokens
-    const mockPrices: Record<string, number> = {
-      '0.0.1463300': 0.15, // SAUCE
-      '0.0.4556315': 0.5, // HBARX
-      '0.0.731861': 6.5, // USDC
-      '0.0.456858': 6.5, // USDT
-    };
-
-    const price = mockPrices[token.address] || 1.0;
-    this.tokenPrices.set(token.address, price);
-    return price;
   }
 
   private startPeriodicRefresh(): void {
@@ -341,16 +281,9 @@ export class YieldAggregator {
     }, this.config.refreshIntervalMs);
   }
 
-  private isDataStale(): boolean {
-    return Date.now() - this.lastUpdate > this.config.stalenessThresholdMs;
-  }
-
   private emitYieldUpdated(count: number): void {
-    // In production, emit event for coordinator
     console.log(`[YIELD] Updated ${count} yield opportunities`);
   }
-
-  private lastUpdate: number = 0;
 }
 
 interface YieldAggregatorConfig {
@@ -359,7 +292,6 @@ interface YieldAggregatorConfig {
   stalenessThresholdMs: number;
 }
 
-// SaucerSwap API types (simplified)
 interface SaucerSwapPool {
   id: string;
   token0: {
@@ -376,4 +308,6 @@ interface SaucerSwapPool {
   sqrtPriceX96: string;
   tick: number;
   fee: number;
+  apy7d: number;
+  tvl: number;
 }

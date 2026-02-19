@@ -230,14 +230,14 @@ export class AgentCoordinator {
       } else {
         taskState.reject?.(new Error(result.error || 'Task failed'));
       }
-
-      this.emitEvent({
-        type: result.status === 'success' ? 'task-completed' : 'task-failed',
-        agentId: message.from,
-        timestamp: Date.now(),
-        data: { taskId: result.taskId, status: result.status },
-      });
     }
+
+    this.emitEvent({
+      type: result.status === 'success' ? 'task-completed' : 'task-failed',
+      agentId: message.from,
+      timestamp: Date.now(),
+      data: { taskId: result.taskId, status: result.status },
+    });
   }
 
   private handleStatusResponse(message: A2AMessage): void {

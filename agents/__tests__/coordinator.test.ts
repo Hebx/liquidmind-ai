@@ -173,11 +173,14 @@ describe('AgentCoordinator', () => {
       const listener = jest.fn();
       const unsubscribe = coordinator.onEvent(listener);
 
+      coordinator.registerAgent('agent-pre', 'http://agentpre.local', ['task']);
+      expect(listener).toHaveBeenCalledTimes(1);
+
       unsubscribe();
 
       coordinator.registerAgent('agent-8', 'http://agent8.local', ['analyze-risk']);
 
-      expect(listener).toHaveBeenCalledTimes(1); // Only the first registration
+      expect(listener).toHaveBeenCalledTimes(1); // Still 1, not 2
     });
   });
 

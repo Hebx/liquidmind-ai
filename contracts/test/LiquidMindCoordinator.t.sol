@@ -1,23 +1,43 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {LiquidMindCoordinator} from "../src/LiquidMindCoordinator.sol";
-import {IAgentCoordinator} from "../src/interfaces/IAgentCoordinator.sol";
-import {Router} from "@chainlink/contracts-ccip/src/v0.8/ccip/Router.sol";
-import {LinkToken} from "@chainlink/contracts/src/v0.8/shared/token/ERC677/LinkToken.sol";
-import {BurnMintERC677} from "@chainlink/contracts/src/v0.8/shared/token/ERC677/BurnMintERC677.sol";
+
+contract MockLinkToken {
+    string public constant name = "Mock LINK";
+    string public constant symbol = "mLINK";
+    uint8 public constant decimals = 18;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "insufficient");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+    }
+}
 
 contract LiquidMindCoordinatorTest is Test {
     LiquidMindCoordinator public coordinator;
-    LinkToken public linkToken;
+    MockLinkToken public linkToken;
     
     address public owner;
     address public agent;
     address public router;
     address public localHook;
 
-    // Chain selectors (mock values)
     uint256 constant ETH_MAINNET = 5009297550715157269;
     uint256 constant ARBITRUM = 4949039107694359620;
     uint256 constant OPTIMISM = 3734403246176062136;
@@ -28,14 +48,9 @@ contract LiquidMindCoordinatorTest is Test {
         router = makeAddr("router");
         localHook = makeAddr("localHook");
 
-        // Deploy mock LINK token
-        linkToken = new LinkToken();
-
-        // Deploy coordinator
+        linkToken = new MockLinkToken();
         coordinator = new LiquidMindCoordinator(router, address(linkToken));
-        
-        // Fund coordinator with LINK
-        linkToken.transfer(address(coordinator), 1000 ether);
+        linkToken.mint(address(coordinator), 1000 ether);
     }
 
     function test_InitialState() public view {
@@ -47,7 +62,7 @@ contract LiquidMindCoordinatorTest is Test {
     function test_RegisterAgent() public {
         coordinator.registerAgent(agent);
         
-        IAgentCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
+        LiquidMindCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
         assertTrue(config.isAuthorized);
         assertEq(config.reputation, 100);
         assertGt(config.lastActivity, 0);
@@ -65,7 +80,7 @@ contract LiquidMindCoordinatorTest is Test {
         coordinator.registerAgent(agent);
         coordinator.revokeAgent(agent);
         
-        IAgentCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
+        LiquidMindCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
         assertFalse(config.isAuthorized);
         assertEq(coordinator.agentCount(), 0);
     }
@@ -74,7 +89,7 @@ contract LiquidMindCoordinatorTest is Test {
         coordinator.registerAgent(agent);
         coordinator.updateAgentReputation(agent, 150);
         
-        IAgentCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
+        LiquidMindCoordinator.AgentConfig memory config = coordinator.getAgent(agent);
         assertEq(config.reputation, 150);
     }
 
@@ -114,17 +129,22 @@ contract LiquidMindCoordinatorTest is Test {
     function testFuzz_RegisterMultipleAgents(address[] calldata _agents) public {
         vm.assume(_agents.length > 0 && _agents.length <= 10);
         
+        uint256 registeredCount = 0;
         for (uint i = 0; i < _agents.length; i++) {
             vm.assume(_agents[i] != address(0));
-            coordinator.registerAgent(_agents[i]);
+            // Skip if already registered to avoid revert in fuzzing
+            if (!coordinator.getAgent(_agents[i]).isAuthorized) {
+                coordinator.registerAgent(_agents[i]);
+                registeredCount++;
+            }
         }
         
-        assertEq(coordinator.agentCount(), _agents.length);
+        assertEq(coordinator.agentCount(), registeredCount);
     }
 
     function test_GetCommand_NotFound() public view {
         bytes32 commandId = keccak256("nonexistent");
-        IAgentCoordinator.CrossChainCommand memory cmd = coordinator.getCommand(commandId);
+        LiquidMindCoordinator.CrossChainCommand memory cmd = coordinator.getCommand(commandId);
         
         assertEq(cmd.timestamp, 0);
         assertFalse(cmd.executed);

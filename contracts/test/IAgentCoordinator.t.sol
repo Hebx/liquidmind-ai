@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {IAgentCoordinator} from "../src/interfaces/IAgentCoordinator.sol";
+import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
+import {PoolKey} from "v4-core/src/types/PoolKey.sol";
+import {Currency} from "v4-core/src/types/Currency.sol";
 
 contract IAgentCoordinatorTest is Test {
     
@@ -12,7 +15,7 @@ contract IAgentCoordinatorTest is Test {
         assertTrue(true);
     }
 
-    function test_StructEncoding() public pure {
+    function test_StructEncoding() public view {
         // Test struct encoding/decoding
         IAgentCoordinator.AgentConfig memory config = IAgentCoordinator.AgentConfig({
             isAuthorized: true,
@@ -28,7 +31,7 @@ contract IAgentCoordinatorTest is Test {
         assertEq(decoded.lastActivity, config.lastActivity);
     }
 
-    function test_CrossChainCommandEncoding() public pure {
+    function test_CrossChainCommandEncoding() public view {
         IAgentCoordinator.CrossChainCommand memory cmd = IAgentCoordinator.CrossChainCommand({
             commandId: keccak256("test"),
             commandType: "rebalance",
@@ -48,18 +51,17 @@ contract IAgentCoordinatorTest is Test {
         assertEq(decoded.executed, cmd.executed);
     }
 
-    function test_LiquidityActionEncoding() public pure {
-        // Create a mock PoolKey (simplified for test)
-        bytes memory poolKeyData = abi.encode(
-            address(0xAAA), // currency0
-            address(0xBBB), // currency1
-            uint24(3000),   // fee
-            int24(60),      // tickSpacing
-            address(0xCCC)  // hooks
-        );
+    function test_LiquidityActionEncoding() public view {
+        PoolKey memory poolKey = PoolKey({
+            currency0: Currency.wrap(address(0xAAA)),
+            currency1: Currency.wrap(address(0xBBB)),
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: IHooks(address(0xCCC))
+        });
 
         IAgentCoordinator.LiquidityAction memory action = IAgentCoordinator.LiquidityAction({
-            poolKey: abi.decode(poolKeyData, (bytes)),
+            poolKey: poolKey,
             tickLower: -100,
             tickUpper: 100,
             liquidity: 1000,

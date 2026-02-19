@@ -197,8 +197,14 @@ export interface RewardToken {
 export interface YieldComparison {
   opportunities: YieldOpportunity[];
   bestApy: YieldOpportunity;
-  bestRiskAdjusted: YieldOpportunity;
+  averageApy: number;
   timestamp: number;
+}
+
+export interface YieldStatus {
+    opportunities: YieldOpportunity[];
+    bestApy: YieldOpportunity;
+    timestamp: number;
 }
 
 export interface YieldAggregationRequest {

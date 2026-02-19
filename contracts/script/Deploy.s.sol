@@ -22,8 +22,10 @@ contract DeployLiquidMind is Script {
         // Deploy Coordinator
         LiquidMindCoordinator coordinator = new LiquidMindCoordinator(ccipRouter, linkToken);
 
-        // Deploy Hook
-        AgenticLiquidityHook hook = new AgenticLiquidityHook(IPoolManager(poolManager));
+        // Deploy Hook with mined salt for correct v4 permissions (0x10C0)
+        bytes32 salt = 0x0000000000000000000000000000000000000000000000000000000000002aa2;
+        address deployerAddress = vm.addr(deployerKey);
+        AgenticLiquidityHook hook = new AgenticLiquidityHook{salt: salt}(IPoolManager(poolManager), deployerAddress);
 
         // Setup
         hook.setAgentCoordinator(address(coordinator));

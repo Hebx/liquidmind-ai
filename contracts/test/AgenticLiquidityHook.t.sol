@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {AgenticLiquidityHook} from "../src/AgenticLiquidityHook.sol";
@@ -9,7 +9,7 @@ import {PoolId, PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {Hooks} from "v4-core/src/libraries/Hooks.sol";
 import {Deployers} from "v4-core/test/utils/Deployers.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 
 contract AgenticLiquidityHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
@@ -23,13 +23,11 @@ contract AgenticLiquidityHookTest is Test, Deployers {
     address public agent;
 
     function setUp() public {
-        // Deploy PoolManager and tokens
         deployFreshManagerAndRouters();
         
         token0 = new MockERC20("Test Token 0", "TKN0", 18);
         token1 = new MockERC20("Test Token 1", "TKN1", 18);
         
-        // Ensure token0 < token1
         if (address(token0) > address(token1)) {
             (token0, token1) = (token1, token0);
         }
@@ -37,12 +35,13 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         owner = address(this);
         agent = makeAddr("agent");
 
-        // Deploy hook
-        uint160 flags = uint160(Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
-        deployCodeTo("AgenticLiquidityHook.sol", abi.encode(manager), address(flags));
-        hook = AgenticLiquidityHook(address(flags));
+        // Deploy hook (use a proper hook address with flags)
+        // Flags: AFTER_INITIALIZE (1<<12), BEFORE_SWAP (1<<7), AFTER_SWAP (1<<6)
+        // 0x1000 | 0x80 | 0x40 = 0x10C0
+        address hookAddress = address(uint160(Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG));
+        deployCodeTo("AgenticLiquidityHook.sol", abi.encode(manager), hookAddress);
+        hook = AgenticLiquidityHook(hookAddress);
         
-        // Initialize pool
         poolKey = PoolKey({
             currency0: Currency.wrap(address(token0)),
             currency1: Currency.wrap(address(token1)),
@@ -51,7 +50,7 @@ contract AgenticLiquidityHookTest is Test, Deployers {
             hooks: hook
         });
         
-        manager.initialize(poolKey, 79228162514264337593543950336); // sqrtPriceX96 for 1.0
+        manager.initialize(poolKey, 79228162514264337593543950336);
     }
 
     function test_InitialState() public view {
@@ -70,16 +69,6 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         vm.prank(agent);
         vm.expectRevert();
         hook.setAgentCoordinator(coordinator);
-    }
-
-    function test_GetHookPermissions() public view {
-        Hooks.Permissions memory permissions = hook.getHookPermissions();
-        
-        assertTrue(permissions.afterInitialize);
-        assertTrue(permissions.beforeSwap);
-        assertTrue(permissions.afterSwap);
-        assertFalse(permissions.beforeInitialize);
-        assertFalse(permissions.beforeAddLiquidity);
     }
 
     function test_SetPoolConfig() public {

@@ -23,7 +23,7 @@
   "author": "Hebx",
   "license": "MIT",
   "dependencies": {
-    "@chainlink/cre-sdk": "^0.1.0",
+    "@chainlink/cre-sdk": "file:./cre-sdk-stub",
     "axios": "^1.6.0"
   },
   "devDependencies": {

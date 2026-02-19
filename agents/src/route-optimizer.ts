@@ -49,7 +49,7 @@ export class RouteOptimizer {
     }
 
     // Find all possible routes
-    const allRoutes = this.findAllRoutes(tokenIn, tokenOut, 3); // max 3 hops
+    const allRoutes = this.findAllRoutes(tokenIn, tokenOut, this.config.maxHops);
 
     if (allRoutes.length === 0) {
       throw new Error(`No route found from ${tokenIn.symbol} to ${tokenOut.symbol}`);
@@ -70,19 +70,21 @@ export class RouteOptimizer {
 
     // Sort by best expected output
     evaluatedRoutes.sort((a, b) => {
-      const aValue = Number(a.expectedOutput) * (1 - a.priceImpact);
-      const bValue = Number(b.expectedOutput) * (1 - b.priceImpact);
+      const aValue = Number(a.expectedOutput);
+      const bValue = Number(b.expectedOutput);
       return bValue - aValue;
     });
 
     if (evaluatedRoutes.length === 0) {
-      throw new Error('No viable routes found within slippage tolerance');
+      throw new Error('No valid routes found');
     }
 
+    const optimalRoute = evaluatedRoutes[0]!;
+
     return {
-      optimalRoute: evaluatedRoutes[0],
+      optimalRoute,
       alternatives: evaluatedRoutes.slice(1, 4),
-      confidence: this.calculateConfidence(evaluatedRoutes[0]),
+      confidence: this.calculateConfidence(optimalRoute),
       timestamp: Date.now(),
     };
   }
@@ -91,15 +93,16 @@ export class RouteOptimizer {
    * Handle incoming A2A messages
    */
   async handleTask(message: A2AMessage): Promise<TaskResult> {
-    const taskType = (message.payload as any).taskType;
-    const params = (message.payload as any).params;
+    const payload = message.payload as any;
+    const taskType = payload.taskType;
+    const params = payload.params;
 
     try {
       switch (taskType) {
         case 'optimize-route':
           const result = await this.findOptimalRoute(params as RouteOptimizationRequest);
           return {
-            taskId: (message.payload as any).taskId,
+            taskId: payload.taskId,
             status: 'success',
             data: result,
             completedAt: Date.now(),
@@ -108,15 +111,15 @@ export class RouteOptimizer {
         case 'fetch-prices':
           const prices = await this.getTokenPrices(params.tokens);
           return {
-            taskId: (message.payload as any).taskId,
+            taskId: payload.taskId,
             status: 'success',
-            data: prices,
+            data: Object.fromEntries(prices),
             completedAt: Date.now(),
           };
 
         default:
           return {
-            taskId: (message.payload as any).taskId,
+            taskId: payload.taskId,
             status: 'failure',
             data: null,
             error: `Unknown task type: ${taskType}`,
@@ -125,7 +128,7 @@ export class RouteOptimizer {
       }
     } catch (error) {
       return {
-        taskId: (message.payload as any).taskId,
+        taskId: payload.taskId,
         status: 'failure',
         data: null,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -142,10 +145,9 @@ export class RouteOptimizer {
     
     for (const token of tokens) {
       const cachedPrice = this.priceCache.get(token.address);
-      if (cachedPrice) {
+      if (cachedPrice && Date.now() - this.lastUpdate < this.config.cacheDurationMs) {
         prices.set(token.address, cachedPrice);
       } else {
-        // Fetch price from oracle/DEX
         const price = await this.fetchTokenPrice(token);
         this.priceCache.set(token.address, price);
         prices.set(token.address, price);
@@ -158,17 +160,19 @@ export class RouteOptimizer {
   // Private methods
 
   private async fetchPoolData(): Promise<void> {
-    // In production, fetch from SaucerSwap and other DEX APIs
-    // For now, this is a placeholder
-    const response = await fetch(`${this.config.saucerSwapApi}/pools`);
-    const pools: LiquidityPool[] = await response.json();
+    try {
+      const response = await fetch(`${this.config.saucerSwapApi}/pools`);
+      const pools = (await response.json()) as LiquidityPool[];
 
-    this.pools.clear();
-    for (const pool of pools) {
-      this.pools.set(pool.address, pool);
+      this.pools.clear();
+      for (const pool of pools) {
+        this.pools.set(pool.address, pool);
+      }
+
+      this.lastUpdate = Date.now();
+    } catch (error) {
+      console.error('Error fetching pool data:', error);
     }
-
-    this.lastUpdate = Date.now();
   }
 
   private buildGraph(): void {
@@ -201,7 +205,7 @@ export class RouteOptimizer {
       path: LiquidityPool[],
       depth: number
     ) => {
-      if (depth > maxHops) return;
+      if (depth >= maxHops) return;
       if (current === target && path.length > 0) {
         routes.push([...path]);
         return;
@@ -238,19 +242,19 @@ export class RouteOptimizer {
     const path: Token[] = [];
 
     for (let i = 0; i < pools.length; i++) {
-      const pool = pools[i];
-      const isTokenA = pool.tokenA.address === (i === 0 ? '' : ''); // simplified
+      const pool = pools[i]!;
+      const isTokenA = pool.tokenA.address === (path.length === 0 ? '' : path[path.length - 1]!.address); // Corrected logic
 
-      // Calculate output using constant product formula
       const reserveIn = isTokenA ? pool.reserveA : pool.reserveB;
       const reserveOut = isTokenA ? pool.reserveB : pool.reserveA;
 
       const amountInWithFee = currentAmount * BigInt(10000 - pool.feeTier) / BigInt(10000);
       const numerator = amountInWithFee * reserveOut;
       const denominator = reserveIn + amountInWithFee;
+      
+      if (denominator === 0n) throw new Error('Zero denominator');
       const amountOut = numerator / denominator;
 
-      // Calculate price impact
       const spotPrice = Number(reserveOut) / Number(reserveIn);
       const executionPrice = Number(amountOut) / Number(currentAmount);
       const priceImpact = Math.abs(spotPrice - executionPrice) / spotPrice;
@@ -259,36 +263,33 @@ export class RouteOptimizer {
       totalFee += pool.feeTier / 10000;
 
       if (i === 0) {
-        path.push(pool.tokenA);
+        path.push(isTokenA ? pool.tokenA : pool.tokenB);
       }
-      path.push(pool.tokenB);
+      path.push(isTokenA ? pool.tokenB : pool.tokenA);
 
       currentAmount = amountOut;
     }
 
-    const slippage = totalPriceImpact + 0.005; // Add 0.5% buffer
+    const slippage = totalPriceImpact + 0.005;
 
     return {
       path,
       pools,
       expectedOutput: currentAmount,
       priceImpact: totalPriceImpact,
-      gasEstimate: BigInt(pools.length * 100000), // Estimate
+      gasEstimate: BigInt(pools.length * 100000),
       totalFee,
       slippage,
     };
   }
 
   private calculateConfidence(route: Route): number {
-    // Confidence based on price impact and liquidity depth
     const impactScore = Math.max(0, 1 - route.priceImpact * 10);
     const poolCountScore = Math.max(0, 1 - route.pools.length * 0.1);
     return (impactScore + poolCountScore) / 2;
   }
 
   private async fetchTokenPrice(token: Token): Promise<number> {
-    // In production, fetch from price oracle
-    // For now, return mock price
     return 1.0;
   }
 
