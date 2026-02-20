@@ -1,14 +1,43 @@
 @import "tailwindcss";
 @import "@rainbow-me/rainbowkit/styles.css";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #F8F9FA;
-  --foreground: #0A0A0F;
-  --primary: #0066FF;
-  --secondary: #00D4AA;
-  --accent: #FF6B00;
-  --dark: #0A0A0F;
-  --light: #F8F9FA;
+  /* Neo-Brutalist Color System */
+  --bg-primary: #0A0A0A;
+  --bg-secondary: #141414;
+  --bg-tertiary: #1A1A1A;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A3A3A3;
+  --text-muted: #525252;
+  --accent-lime: #CCFF00;
+  --accent-cyan: #00FFFF;
+  --accent-magenta: #FF00FF;
+  --border-thick: 3px;
+  --border-thin: 1px;
+  
+  /* Shadcn overrides */
+  --background: #0A0A0A;
+  --foreground: #FFFFFF;
+  --card: #141414;
+  --card-foreground: #FFFFFF;
+  --popover: #141414;
+  --popover-foreground: #FFFFFF;
+  --primary: #CCFF00;
+  --primary-foreground: #0A0A0A;
+  --secondary: #1A1A1A;
+  --secondary-foreground: #FFFFFF;
+  --muted: #1A1A1A;
+  --muted-foreground: #A3A3A3;
+  --accent: #00FFFF;
+  --accent-foreground: #0A0A0A;
+  --destructive: #FF3333;
+  --border: #333333;
+  --input: #1A1A1A;
+  --ring: #CCFF00;
+  --radius: 0px;
 }
 
 @theme inline {
@@ -17,18 +46,245 @@
   --color-primary: var(--primary);
   --color-secondary: var(--secondary);
   --color-accent: var(--accent);
-  --color-dark: var(--dark);
-  --color-light: var(--light);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  
+  /* Custom colors */
+  --color-lime: #CCFF00;
+  --color-cyan: #00FFFF;
+  --color-magenta: #FF00FF;
+  --color-bg-primary: #0A0A0A;
+  --color-bg-secondary: #141414;
+  --color-bg-tertiary: #1A1A1A;
+  --color-text-secondary: #A3A3A3;
+  --color-text-muted: #525252;
+  
+  /* Font families */
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-body: 'Plus Jakarta Sans', sans-serif;
+  
+  /* Border radius */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0A0A0F;
-    --foreground: #F8F9FA;
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-[var(--bg-primary)] text-[var(--text-primary)] antialiased;
+    font-family: var(--font-body);
+  }
+  
+  ::selection {
+    background: var(--accent-lime);
+    color: var(--bg-primary);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+@layer components {
+  /* Neo-Brutalist Button Styles */
+  .btn-brutal {
+    @apply relative px-6 py-3 font-bold uppercase tracking-wider transition-all duration-150;
+    border: var(--border-thick) solid var(--text-primary);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: 4px 4px 0px var(--text-primary);
+  }
+  
+  .btn-brutal:hover {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0px var(--text-primary);
+  }
+  
+  .btn-brutal:active {
+    transform: translate(4px, 4px);
+    box-shadow: 0px 0px 0px var(--text-primary);
+  }
+  
+  .btn-brutal-primary {
+    @apply btn-brutal;
+    background: var(--accent-lime);
+    color: var(--bg-primary);
+    border-color: var(--accent-lime);
+    box-shadow: 4px 4px 0px var(--accent-lime);
+  }
+  
+  .btn-brutal-primary:hover {
+    box-shadow: 2px 2px 0px var(--accent-lime);
+  }
+  
+  .btn-brutal-primary:active {
+    box-shadow: 0px 0px 0px var(--accent-lime);
+  }
+  
+  /* Neo-Brutalist Card Styles */
+  .card-brutal {
+    @apply relative p-6;
+    border: var(--border-thick) solid var(--border);
+    background: var(--bg-secondary);
+  }
+  
+  .card-brutal-lime {
+    @apply card-brutal;
+    border-color: var(--accent-lime);
+    box-shadow: 6px 6px 0px var(--accent-lime);
+  }
+  
+  .card-brutal-cyan {
+    @apply card-brutal;
+    border-color: var(--accent-cyan);
+    box-shadow: 6px 6px 0px var(--accent-cyan);
+  }
+  
+  /* Grid Pattern Background */
+  .bg-grid {
+    background-image: 
+      linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+  
+  /* Scanline Effect */
+  .scanlines::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  /* Glitch Text Effect */
+  .glitch {
+    position: relative;
+  }
+  
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .glitch::before {
+    animation: glitch-1 0.3s infinite linear alternate-reverse;
+    color: var(--accent-cyan);
+    z-index: -1;
+  }
+  
+  .glitch::after {
+    animation: glitch-2 0.3s infinite linear alternate-reverse;
+    color: var(--accent-magenta);
+    z-index: -2;
+  }
+  
+  @keyframes glitch-1 {
+    0%, 100% { clip-path: inset(0 0 95% 0); transform: translate(-2px, 0); }
+    25% { clip-path: inset(20% 0 60% 0); transform: translate(2px, 0); }
+    50% { clip-path: inset(50% 0 30% 0); transform: translate(-2px, 0); }
+    75% { clip-path: inset(80% 0 5% 0); transform: translate(2px, 0); }
+  }
+  
+  @keyframes glitch-2 {
+    0%, 100% { clip-path: inset(95% 0 0 0); transform: translate(2px, 0); }
+    25% { clip-path: inset(60% 0 20% 0); transform: translate(-2px, 0); }
+    50% { clip-path: inset(30% 0 50% 0); transform: translate(2px, 0); }
+    75% { clip-path: inset(5% 0 80% 0); transform: translate(-2px, 0); }
+  }
+  
+  /* Marquee Animation */
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  
+  .animate-marquee {
+    animation: marquee 20s linear infinite;
+  }
+  
+  /* Pulse Glow */
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px var(--accent-lime), 0 0 10px var(--accent-lime); }
+    50% { box-shadow: 0 0 20px var(--accent-lime), 0 0 30px var(--accent-lime); }
+  }
+  
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+  
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  
+  .font-body {
+    font-family: var(--font-body);
+  }
+
+  .text-lime { color: var(--accent-lime); }
+  .text-cyan { color: var(--accent-cyan); }
+  .text-magenta { color: var(--accent-magenta); }
+  .text-text-secondary { color: var(--text-secondary); }
+  .text-text-muted { color: var(--text-muted); }
+  .text-text-primary { color: var(--text-primary); }
+
+  .bg-lime { background: var(--accent-lime); }
+  .bg-cyan { background: var(--accent-cyan); }
+  .bg-magenta { background: var(--accent-magenta); }
+  .bg-bg-primary { background: var(--bg-primary); }
+  .bg-bg-secondary { background: var(--bg-secondary); }
+  .bg-bg-tertiary { background: var(--bg-tertiary); }
+
+  .border-lime { border-color: var(--accent-lime); }
+  .border-cyan { border-color: var(--accent-cyan); }
+  .border-magenta { border-color: var(--accent-magenta); }
+
+  .text-stroke {
+    -webkit-text-stroke: 1px var(--text-primary);
+    color: transparent;
+  }
+  
+  .text-stroke-lime {
+    -webkit-text-stroke: 2px var(--accent-lime);
+    color: transparent;
+  }
 }

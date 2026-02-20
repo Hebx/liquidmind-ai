@@ -3,29 +3,40 @@
 import React from 'react';
 
 const agents = [
-  { name: 'LP Optimizer', status: 'Analyzing Pool Data', color: 'text-secondary' },
-  { name: 'Risk Manager', status: 'Verifying Compliance', color: 'text-primary' },
-  { name: 'Execution Agent', status: 'Waiting for Intent', color: 'text-accent' },
+  { name: 'ROUTE OPTIMIZER', status: 'Mapping pools', color: 'text-cyan', pulse: 'bg-cyan' },
+  { name: 'RISK ANALYZER', status: 'Stability check', color: 'text-magenta', pulse: 'bg-magenta' },
+  { name: 'YIELD AGGREGATOR', status: 'APY scan', color: 'text-lime', pulse: 'bg-lime' },
 ];
 
 export default function AgentStatus() {
   return (
-    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl shadow-xl backdrop-blur-md">
-      <h2 className="text-xl font-bold text-accent mb-4 font-space">Agent Coordination</h2>
-      <div className="space-y-4">
-        {agents.map((agent) => (
-          <div key={agent.name} className="flex items-center justify-between p-3 bg-dark/30 rounded-lg border border-white/5">
-            <div>
-              <p className="text-sm font-semibold text-white/80">{agent.name}</p>
-              <p className={`text-xs ${agent.color} animate-pulse`}>{agent.status}</p>
+    <div className="card-brutal-cyan relative overflow-hidden">
+      <div className="absolute -top-6 -right-6 w-20 h-20 border-[var(--border-thick)] border-cyan opacity-20" />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-display text-2xl tracking-widest text-cyan">AGENT SWARM</h2>
+          <div className="text-[10px] font-mono text-text-secondary">A2A · LIVE</div>
+        </div>
+
+        <div className="space-y-3">
+          {agents.map((agent) => (
+            <div key={agent.name} className="flex items-center justify-between border-[var(--border-thin)] border-cyan/30 p-3">
+              <div>
+                <p className="text-xs font-mono text-text-secondary">{agent.name}</p>
+                <p className={`text-sm font-bold ${agent.color}`}>{agent.status}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 ${agent.pulse} pulse-glow`} />
+                <span className="text-[10px] font-mono text-text-muted">ACTIVE</span>
+              </div>
             </div>
-            <div className="h-2 w-2 rounded-full bg-secondary shadow-[0_0_10px_rgba(0,212,170,0.5)]"></div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-white/10 flex justify-between items-center">
-        <span className="text-[10px] text-white/30 uppercase tracking-widest">Protocol Health</span>
-        <span className="text-[10px] text-secondary font-mono">SECURE</span>
+          ))}
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-cyan/30 flex items-center justify-between">
+          <span className="text-[10px] font-mono text-text-secondary">PROTOCOL HEALTH</span>
+          <span className="text-[10px] font-mono text-cyan">SECURE</span>
+        </div>
       </div>
     </div>
   );

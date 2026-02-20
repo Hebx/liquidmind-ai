@@ -10,32 +10,34 @@ interface PositionProps {
   status: 'OPTIMIZED' | 'PENDING' | 'REBALANCING';
 }
 
-export default function PositionCard({ pair, chain, value, apy, status }: PositionProps) {
-  const statusColors = {
-    OPTIMIZED: 'bg-secondary/20 text-secondary border-secondary/50',
-    PENDING: 'bg-primary/20 text-primary border-primary/50',
-    REBALANCING: 'bg-accent/20 text-accent border-accent/50',
-  };
+const statusStyles = {
+  OPTIMIZED: 'border-lime text-lime',
+  PENDING: 'border-cyan text-cyan',
+  REBALANCING: 'border-magenta text-magenta',
+};
 
+export default function PositionCard({ pair, chain, value, apy, status }: PositionProps) {
   return (
-    <div className="bg-dark/40 border border-white/5 p-5 rounded-xl transition-all hover:border-primary/30 group">
-      <div className="flex justify-between items-start mb-3">
+    <div className="card-brutal relative">
+      <div className="absolute top-2 right-2 text-[10px] font-mono text-text-muted">#{pair.replace('/', '')}</div>
+      <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">{pair}</h3>
-          <p className="text-xs text-white/50">{chain}</p>
+          <h3 className="font-display text-3xl tracking-wide text-text-primary">{pair}</h3>
+          <p className="text-[10px] font-mono text-text-secondary uppercase">{chain}</p>
         </div>
-        <span className={`text-[10px] px-2 py-1 rounded border ${statusColors[status]} font-bold`}>
+        <span className={`text-[10px] font-mono px-2 py-1 border-[var(--border-thin)] ${statusStyles[status]}`}>
           {status}
         </span>
       </div>
+
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[10px] text-white/30 uppercase">Position Value</p>
-          <p className="text-md font-mono text-white">{value}</p>
+        <div className="border-[var(--border-thin)] border-border p-3">
+          <p className="text-[10px] font-mono text-text-muted uppercase">Value</p>
+          <p className="text-lg font-mono text-text-primary">{value}</p>
         </div>
-        <div>
-          <p className="text-[10px] text-white/30 uppercase">Real-time APY</p>
-          <p className="text-md font-mono text-secondary">{apy}</p>
+        <div className="border-[var(--border-thin)] border-border p-3">
+          <p className="text-[10px] font-mono text-text-muted uppercase">APY</p>
+          <p className="text-lg font-mono text-lime">{apy}</p>
         </div>
       </div>
     </div>

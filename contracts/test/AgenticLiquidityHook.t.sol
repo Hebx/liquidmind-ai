@@ -35,12 +35,21 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         owner = address(this);
         agent = makeAddr("agent");
 
-        // Deploy hook (use a proper hook address with flags)
+        // Deploy hook at an address with proper flags
         // Flags: AFTER_INITIALIZE (1<<12), BEFORE_SWAP (1<<7), AFTER_SWAP (1<<6)
-        // 0x1000 | 0x80 | 0x40 = 0x10C0
-        address hookAddress = address(uint160(Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG));
-        deployCodeTo("AgenticLiquidityHook.sol", abi.encode(manager), hookAddress);
-        hook = AgenticLiquidityHook(hookAddress);
+        uint160 flags = uint160(Hooks.AFTER_INITIALIZE_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG);
+        address hookAddr = address(flags);
+        
+        // Deploy hook normally first to get the runtime bytecode
+        AgenticLiquidityHook hookImpl = new AgenticLiquidityHook(manager, address(this));
+        
+        // Use vm.etch to copy the bytecode to the target address with flags
+        vm.etch(hookAddr, address(hookImpl).code);
+        hook = AgenticLiquidityHook(hookAddr);
+        
+        // Set owner in storage slot 3 (owner is 4th state variable after 3 mappings)
+        // We need to set this because vm.etch doesn't copy storage
+        vm.store(hookAddr, bytes32(uint256(3)), bytes32(uint256(uint160(address(this)))));
         
         poolKey = PoolKey({
             currency0: Currency.wrap(address(token0)),

@@ -8,29 +8,41 @@ export default function IntentForm() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Submitted Intent:', intent);
-    // Here we would call the agent coordinator
   };
 
   return (
-    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl shadow-xl backdrop-blur-md">
-      <h2 className="text-xl font-bold text-secondary mb-4 font-space">Capital Intent</h2>
-      <form onSubmit={handleSubmit}>
-        <textarea
-          className="w-full h-32 bg-dark/50 border border-white/10 rounded-xl p-4 text-light focus:outline-none focus:ring-2 focus:ring-primary transition-all resize-none"
-          placeholder="e.g., Deploy 10 ETH to Base Sepolia Uniswap V4, optimize for yield with high risk tolerance."
-          value={intent}
-          onChange={(e) => setIntent(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="mt-4 w-full bg-primary hover:bg-primary/80 text-white font-bold py-3 rounded-xl transition-colors shadow-lg shadow-primary/20"
-        >
-          Execute Autonomous Strategy
-        </button>
-      </form>
-      <p className="text-xs text-white/40 mt-3 text-center">
-        Verification provided by Chainlink CRE & Verifiable AI Workflow
-      </p>
+    <div className="card-brutal-lime relative overflow-hidden scanlines">
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-display text-2xl tracking-widest text-lime">CAPITAL INTENT</h2>
+          <div className="text-[10px] font-mono text-text-secondary">v4 · CRE · x402</div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <textarea
+            className="w-full h-36 bg-bg-primary border-[var(--border-thick)] border-lime p-4 text-text-primary font-mono text-sm placeholder:text-text-muted focus:outline-none focus:ring-0"
+            placeholder="Deploy 10 ETH to Base Sepolia, optimize for yield, high risk tolerance."
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button type="submit" className="btn-brutal-primary pulse-glow">
+              EXECUTE STRATEGY
+            </button>
+            <button type="button" className="btn-brutal">
+              SIMULATE ROUTE
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-6 pt-4 border-t border-lime/30 flex items-center justify-between">
+          <div className="text-[10px] font-mono text-text-secondary">
+            VERIFIED EXECUTION PIPELINE
+          </div>
+          <div className="text-[10px] font-mono text-lime">READY</div>
+        </div>
+      </div>
     </div>
   );
 }

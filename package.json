@@ -61,5 +61,8 @@
     "liquidity-management"
   ],
   "author": "Hebx",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.16.0"
+  }
 }

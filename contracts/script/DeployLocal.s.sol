@@ -36,7 +36,8 @@ contract DeployLocal is Script {
         );
 
         // Deploy Hook
-        AgenticLiquidityHook hook = new AgenticLiquidityHook(IPoolManager(poolManager));
+        address deployer = vm.addr(deployerKey);
+        AgenticLiquidityHook hook = new AgenticLiquidityHook(IPoolManager(poolManager), deployer);
 
         // Setup connections
         hook.setAgentCoordinator(address(coordinator));
