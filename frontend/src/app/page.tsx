@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import IntentForm from '@/components/IntentForm';
 import AgentStatus from '@/components/AgentStatus';
 import PositionCard from '@/components/PositionCard';
-import { fetchActivity, SubgraphActivity } from '@/lib/subgraph';
+import ActivityCharts from '@/components/ActivityCharts';
+import { fetchActivity, fetchPositions, SubgraphActivity, SubgraphPosition } from '@/lib/subgraph';
 
 type Overview = {
   ok: boolean;
@@ -23,6 +24,7 @@ type Overview = {
 export default function Home() {
   const [overview, setOverview] = useState<Overview>({ ok: false });
   const [activity, setActivity] = useState<SubgraphActivity | null>(null);
+  const [positions, setPositions] = useState<SubgraphPosition[] | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,6 +45,14 @@ export default function Home() {
         if (active) setActivity(null);
       });
 
+    fetchPositions()
+      .then((data) => {
+        if (active) setPositions(data);
+      })
+      .catch(() => {
+        if (active) setPositions(null);
+      });
+
     const interval = setInterval(() => {
       fetchActivity()
         .then((data) => {
@@ -50,6 +60,14 @@ export default function Home() {
         })
         .catch(() => {
           if (active) setActivity(null);
+        });
+
+      fetchPositions()
+        .then((data) => {
+          if (active) setPositions(data);
+        })
+        .catch(() => {
+          if (active) setPositions(null);
         });
     }, 15000);
 
@@ -150,15 +168,33 @@ export default function Home() {
                   <p className="text-[10px] font-mono text-text-secondary">MANAGED BY AUTONOMOUS AGENTS</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[10px] font-mono text-text-muted uppercase">Total Value</p>
-                  <p className="text-2xl font-mono text-lime">$142,069.42</p>
+                  <p className="text-[10px] font-mono text-text-muted uppercase">Active Pools</p>
+                  <p className="text-2xl font-mono text-lime">{positions ? positions.length : '—'}</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <PositionCard pair="ETH/USDC" chain={`Base Sepolia · ${overview.hookAddress ? 'Hook Live' : 'Hook Pending'}`} value="$84,200" apy="24.2%" status="OPTIMIZED" />
-                <PositionCard pair="LINK/ETH" chain={`Coordinator ${overview.coordinatorDeployed ? 'Live' : 'Offline'}`} value="$57,869" apy="18.5%" status="REBALANCING" />
-              </div>
+              {!positions && (
+                <div className="text-xs font-mono text-text-muted">Waiting for position data…</div>
+              )}
+
+              {positions && positions.length === 0 && (
+                <div className="text-xs font-mono text-text-muted">No positions yet</div>
+              )}
+
+              {positions && positions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {positions.slice(0, 4).map((position) => (
+                    <PositionCard
+                      key={position.poolId}
+                      poolId={position.poolId}
+                      chain={`Base Sepolia · ${overview.hookAddress ? 'Hook Live' : 'Hook Pending'}`}
+                      range={`${position.tickLower} → ${position.tickUpper}`}
+                      feeBps={position.feeBps}
+                      status={position.feeBps === '—' ? 'REBALANCING' : 'OPTIMIZED'}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-6 border-[var(--border-thin)] border-lime/40 p-4">
                 <div className="text-[10px] font-mono text-text-secondary">AGENT INSIGHT</div>
@@ -183,6 +219,18 @@ export default function Home() {
                 <p className="text-sm font-mono text-magenta mt-2">VERIFIED AI</p>
               </div>
             </div>
+
+            {activity ? (
+              <ActivityCharts activity={activity} />
+            ) : (
+              <div className="card-brutal">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-display text-2xl tracking-widest text-text-primary">ON-CHAIN ANALYTICS</h3>
+                  <span className="text-[10px] font-mono text-text-secondary">SUBGRAPH</span>
+                </div>
+                <div className="text-xs font-mono text-text-muted">Waiting for subgraph data…</div>
+              </div>
+            )}
 
             <div className="card-brutal-cyan">
               <div className="flex items-center justify-between mb-4">
