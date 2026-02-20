@@ -25,9 +25,11 @@ export default function Home() {
   const [overview, setOverview] = useState<Overview>({ ok: false });
   const [activity, setActivity] = useState<SubgraphActivity | null>(null);
   const [positions, setPositions] = useState<SubgraphPosition[] | null>(null);
+  const [metaBlock, setMetaBlock] = useState<number | null>(null);
   const lastMetaBlockRef = useRef<number | null>(null);
   const lastActivityBlockRef = useRef<number>(0);
   const lastPositionsBlockRef = useRef<number>(0);
+  const [lastEventBlock, setLastEventBlock] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +45,10 @@ export default function Home() {
     const refreshAll = async () => {
       const meta = await fetchMetaBlock();
       if (meta !== null && meta === lastMetaBlockRef.current) return;
-      if (meta !== null) lastMetaBlockRef.current = meta;
+      if (meta !== null) {
+        lastMetaBlockRef.current = meta;
+        setMetaBlock(meta);
+      }
 
       fetchActivity(lastActivityBlockRef.current)
         .then((data) => {
@@ -56,6 +61,9 @@ export default function Home() {
             ...data.messageSent.map((d) => Number(d.blockNumber))
           );
           lastActivityBlockRef.current = Number.isFinite(maxBlock) ? maxBlock : lastActivityBlockRef.current;
+          setLastEventBlock(
+            Math.max(lastActivityBlockRef.current, lastPositionsBlockRef.current) || null
+          );
           setActivity((prev) => {
             if (!prev) return data;
             const merge = <T extends { id: string }>(a: T[], b: T[]) => {
@@ -84,6 +92,9 @@ export default function Home() {
             ...data.map((d) => Number(d.blockNumber))
           );
           lastPositionsBlockRef.current = Number.isFinite(maxBlock) ? maxBlock : lastPositionsBlockRef.current;
+          setLastEventBlock(
+            Math.max(lastActivityBlockRef.current, lastPositionsBlockRef.current) || null
+          );
           setPositions((prev) => {
             if (!prev) return data;
             const map = new Map<string, SubgraphPosition>();
@@ -126,6 +137,9 @@ export default function Home() {
           <div className="flex items-center gap-4">
             <div className="text-[10px] font-mono text-text-muted">
               BLOCK {overview.blockNumber ?? '—'}
+            </div>
+            <div className="text-[10px] font-mono text-cyan border-[var(--border-thin)] border-cyan px-2 py-1">
+              SUBGRAPH {metaBlock ?? '—'}
             </div>
             <ConnectButton />
           </div>
@@ -249,6 +263,37 @@ export default function Home() {
               <div className="card-brutal">
                 <p className="text-[10px] font-mono text-text-muted uppercase">Identity</p>
                 <p className="text-sm font-mono text-magenta mt-2">VERIFIED AI</p>
+              </div>
+            </div>
+
+            <div className="card-brutal">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-2xl tracking-widest text-text-primary">SYSTEM HEALTH</h3>
+                <span className="text-[10px] font-mono text-text-secondary">LIVE</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="border-[var(--border-thin)] border-border p-3">
+                  <div className="text-[10px] font-mono text-text-muted">COORDINATOR</div>
+                  <div className={`text-xs font-mono ${overview.coordinatorDeployed ? 'text-lime' : 'text-magenta'}`}>
+                    {overview.coordinatorDeployed ? 'ONLINE' : 'OFFLINE'}
+                  </div>
+                </div>
+                <div className="border-[var(--border-thin)] border-border p-3">
+                  <div className="text-[10px] font-mono text-text-muted">HOOK</div>
+                  <div className={`text-xs font-mono ${overview.hookDeployed ? 'text-lime' : 'text-magenta'}`}>
+                    {overview.hookDeployed ? 'ONLINE' : 'OFFLINE'}
+                  </div>
+                </div>
+                <div className="border-[var(--border-thin)] border-border p-3">
+                  <div className="text-[10px] font-mono text-text-muted">SUBGRAPH</div>
+                  <div className="text-xs font-mono text-cyan">BLOCK {metaBlock ?? '—'}</div>
+                </div>
+                <div className="border-[var(--border-thin)] border-border p-3">
+                  <div className="text-[10px] font-mono text-text-muted">LAST EVENT</div>
+                  <div className="text-xs font-mono text-text-secondary">
+                    {lastEventBlock ?? '—'}
+                  </div>
+                </div>
               </div>
             </div>
 
