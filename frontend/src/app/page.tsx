@@ -1,12 +1,12 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import IntentForm from '@/components/IntentForm';
 import AgentStatus from '@/components/AgentStatus';
 import PositionCard from '@/components/PositionCard';
 import ActivityCharts from '@/components/ActivityCharts';
-import { fetchActivity, fetchPositions, SubgraphActivity, SubgraphPosition } from '@/lib/subgraph';
+import { fetchActivity, fetchMetaBlock, fetchPositions, SubgraphActivity, SubgraphPosition } from '@/lib/subgraph';
 
 type Overview = {
   ok: boolean;
@@ -25,6 +25,7 @@ export default function Home() {
   const [overview, setOverview] = useState<Overview>({ ok: false });
   const [activity, setActivity] = useState<SubgraphActivity | null>(null);
   const [positions, setPositions] = useState<SubgraphPosition[] | null>(null);
+  const lastMetaBlockRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -37,23 +38,11 @@ export default function Home() {
         if (active) setOverview({ ok: false });
       });
 
-    fetchActivity()
-      .then((data) => {
-        if (active) setActivity(data);
-      })
-      .catch(() => {
-        if (active) setActivity(null);
-      });
+    const refreshAll = async () => {
+      const meta = await fetchMetaBlock();
+      if (meta !== null && meta === lastMetaBlockRef.current) return;
+      if (meta !== null) lastMetaBlockRef.current = meta;
 
-    fetchPositions()
-      .then((data) => {
-        if (active) setPositions(data);
-      })
-      .catch(() => {
-        if (active) setPositions(null);
-      });
-
-    const interval = setInterval(() => {
       fetchActivity()
         .then((data) => {
           if (active) setActivity(data);
@@ -69,6 +58,12 @@ export default function Home() {
         .catch(() => {
           if (active) setPositions(null);
         });
+    };
+
+    refreshAll();
+
+    const interval = setInterval(() => {
+      refreshAll();
     }, 15000);
 
     return () => {
