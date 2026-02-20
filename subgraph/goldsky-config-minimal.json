@@ -1,0 +1,17 @@
+{
+  "version": "1",
+  "name": "test-minimal",
+  "abis": {
+    "Simple": {
+      "path": "./abis/SimpleTransfer.json"
+    }
+  },
+  "instances": [
+    {
+      "abi": "Simple",
+      "address": "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA",
+      "startBlock": 1,
+      "chain": "base-sepolia"
+    }
+  ]
+}

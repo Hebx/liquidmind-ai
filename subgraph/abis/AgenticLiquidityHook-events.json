@@ -1,0 +1,6 @@
+[
+  {"type":"event","name":"AgentActionExecuted","inputs":[{"name":"actionId","type":"bytes32","indexed":true,"internalType":"bytes32"},{"name":"actionType","type":"string","indexed":false,"internalType":"string"},{"name":"timestamp","type":"uint256","indexed":false,"internalType":"uint256"}],"anonymous":false},
+  {"type":"event","name":"CrossChainSignalReceived","inputs":[{"name":"sourceChainId","type":"uint256","indexed":true,"internalType":"uint256"},{"name":"signalId","type":"bytes32","indexed":true,"internalType":"bytes32"},{"name":"data","type":"bytes","indexed":false,"internalType":"bytes"}],"anonymous":false},
+  {"type":"event","name":"FeeUpdated","inputs":[{"name":"poolId","type":"bytes32","indexed":true,"internalType":"bytes32"},{"name":"newFee","type":"uint24","indexed":false,"internalType":"uint24"}],"anonymous":false},
+  {"type":"event","name":"LiquidityRebalanced","inputs":[{"name":"poolId","type":"bytes32","indexed":true,"internalType":"bytes32"},{"name":"newTickLower","type":"int24","indexed":false,"internalType":"int24"},{"name":"newTickUpper","type":"int24","indexed":false,"internalType":"int24"}],"anonymous":false}
+]

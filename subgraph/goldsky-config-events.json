@@ -1,0 +1,26 @@
+{
+  "version": "1",
+  "name": "liquidmind",
+  "abis": {
+    "AgenticLiquidityHook": {
+      "path": "./abis/AgenticLiquidityHook-events.json"
+    },
+    "LiquidMindCoordinator": {
+      "path": "./abis/LiquidMindCoordinator-events.json"
+    }
+  },
+  "instances": [
+    {
+      "abi": "AgenticLiquidityHook",
+      "address": "0x15b60e98a00d83BA4B010CceDb09864d1d93d0c0",
+      "startBlock": 1,
+      "chain": "base-sepolia"
+    },
+    {
+      "abi": "LiquidMindCoordinator",
+      "address": "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA",
+      "startBlock": 1,
+      "chain": "base-sepolia"
+    }
+  ]
+}

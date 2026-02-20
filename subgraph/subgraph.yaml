@@ -1,0 +1,65 @@
+specVersion: 1.0.0
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AgenticLiquidityHook
+    network: base-sepolia
+    source:
+      address: "0x15b60e98a00d83BA4B010CceDb09864d1d93d0c0"
+      abi: AgenticLiquidityHook
+      startBlock: 1
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/agentic-liquidity-hook.ts
+      entities:
+        - AgentActionExecuted
+        - CrossChainSignalReceived
+        - FeeUpdated
+        - LiquidityRebalanced
+      abis:
+        - name: AgenticLiquidityHook
+          file: ./abis/AgenticLiquidityHook.json
+      eventHandlers:
+        - event: AgentActionExecuted(indexed bytes32,string,uint256)
+          handler: handleAgentActionExecuted
+        - event: CrossChainSignalReceived(indexed uint256,indexed bytes32,bytes)
+          handler: handleCrossChainSignalReceived
+        - event: FeeUpdated(indexed bytes32,uint24)
+          handler: handleFeeUpdated
+        - event: LiquidityRebalanced(indexed bytes32,int24,int24)
+          handler: handleLiquidityRebalanced
+  - kind: ethereum
+    name: LiquidMindCoordinator
+    network: base-sepolia
+    source:
+      address: "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA"
+      abi: LiquidMindCoordinator
+      startBlock: 1
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/liquid-mind-coordinator.ts
+      entities:
+        - AgentRegistered
+        - HookRegistered
+        - LiquidityCommandSent
+        - MessageReceived
+        - MessageSent
+      abis:
+        - name: LiquidMindCoordinator
+          file: ./abis/LiquidMindCoordinator.json
+      eventHandlers:
+        - event: AgentRegistered(indexed address,bool)
+          handler: handleAgentRegistered
+        - event: HookRegistered(indexed uint256,address)
+          handler: handleHookRegistered
+        - event: LiquidityCommandSent(indexed uint256,indexed bytes32,string)
+          handler: handleLiquidityCommandSent
+        - event: MessageReceived(indexed bytes32,indexed uint256,address,bytes)
+          handler: handleMessageReceived
+        - event: MessageSent(indexed bytes32,indexed uint256,address,bytes,address,uint256)
+          handler: handleMessageSent

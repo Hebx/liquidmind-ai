@@ -1,0 +1,81 @@
+type AgentActionExecuted @entity {
+  id: ID!
+  actionId: Bytes!
+  actionType: String!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type CrossChainSignalReceived @entity {
+  id: ID!
+  sourceChainId: BigInt!
+  signalId: Bytes!
+  data: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type FeeUpdated @entity {
+  id: ID!
+  poolId: Bytes!
+  newFee: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type LiquidityRebalanced @entity {
+  id: ID!
+  poolId: Bytes!
+  newTickLower: BigInt!
+  newTickUpper: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type AgentRegistered @entity {
+  id: ID!
+  agent: Bytes!
+  authorized: Boolean!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type HookRegistered @entity {
+  id: ID!
+  chainId: BigInt!
+  hook: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type LiquidityCommandSent @entity {
+  id: ID!
+  targetChainId: BigInt!
+  commandId: Bytes!
+  commandType: String!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type MessageReceived @entity {
+  id: ID!
+  messageId: Bytes!
+  sourceChainSelector: BigInt!
+  sender: Bytes!
+  data: Bytes!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
+
+type MessageSent @entity {
+  id: ID!
+  messageId: Bytes!
+  destinationChainSelector: BigInt!
+  receiver: Bytes!
+  data: Bytes!
+  feeToken: Bytes!
+  fees: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes!
+}
