@@ -30,21 +30,21 @@ async function fetchMetaBlock(): Promise<number | null> {
   return typeof number === 'number' ? number : null;
 }
 
-export async function fetchActivity(): Promise<SubgraphActivity | null> {
+export async function fetchActivity(sinceBlock?: number): Promise<SubgraphActivity | null> {
   if (!SUBGRAPH_URL) return null;
 
   const query = `
-    query Activity($limit: Int!) {
-      liquidityRebalanceds(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+    query Activity($limit: Int!, $since: BigInt) {
+      liquidityRebalanceds(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id poolId newTickLower newTickUpper blockNumber
       }
-      feeUpdateds(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+      feeUpdateds(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id poolId newFee blockNumber
       }
-      agentActionExecuteds(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+      agentActionExecuteds(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id actionId actionType timestamp blockNumber
       }
-      messageSents(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+      messageSents(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id messageId destinationChainSelector fees blockNumber
       }
     }
@@ -53,7 +53,7 @@ export async function fetchActivity(): Promise<SubgraphActivity | null> {
   const res = await fetch(SUBGRAPH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables: { limit: 50 } }),
+    body: JSON.stringify({ query, variables: { limit: 50, since: sinceBlock ?? 0 } }),
   });
 
   if (!res.ok) return null;
@@ -68,15 +68,15 @@ export async function fetchActivity(): Promise<SubgraphActivity | null> {
   };
 }
 
-export async function fetchPositions(): Promise<SubgraphPosition[] | null> {
+export async function fetchPositions(sinceBlock?: number): Promise<SubgraphPosition[] | null> {
   if (!SUBGRAPH_URL) return null;
 
   const query = `
-    query Positions($limit: Int!) {
-      liquidityRebalanceds(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+    query Positions($limit: Int!, $since: BigInt) {
+      liquidityRebalanceds(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id poolId newTickLower newTickUpper blockNumber
       }
-      feeUpdateds(first: $limit, orderBy: blockNumber, orderDirection: desc) {
+      feeUpdateds(first: $limit, orderBy: blockNumber, orderDirection: asc, where: { blockNumber_gt: $since }) {
         id poolId newFee blockNumber
       }
     }
@@ -85,7 +85,7 @@ export async function fetchPositions(): Promise<SubgraphPosition[] | null> {
   const res = await fetch(SUBGRAPH_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables: { limit: 20 } }),
+    body: JSON.stringify({ query, variables: { limit: 20, since: sinceBlock ?? 0 } }),
   });
 
   if (!res.ok) return null;

@@ -26,6 +26,8 @@ export default function Home() {
   const [activity, setActivity] = useState<SubgraphActivity | null>(null);
   const [positions, setPositions] = useState<SubgraphPosition[] | null>(null);
   const lastMetaBlockRef = useRef<number | null>(null);
+  const lastActivityBlockRef = useRef<number>(0);
+  const lastPositionsBlockRef = useRef<number>(0);
 
   useEffect(() => {
     let active = true;
@@ -43,17 +45,52 @@ export default function Home() {
       if (meta !== null && meta === lastMetaBlockRef.current) return;
       if (meta !== null) lastMetaBlockRef.current = meta;
 
-      fetchActivity()
+      fetchActivity(lastActivityBlockRef.current)
         .then((data) => {
-          if (active) setActivity(data);
+          if (!active || !data) return;
+          const maxBlock = Math.max(
+            lastActivityBlockRef.current,
+            ...data.liquidityRebalanced.map((d) => Number(d.blockNumber)),
+            ...data.feeUpdated.map((d) => Number(d.blockNumber)),
+            ...data.agentActionExecuted.map((d) => Number(d.blockNumber)),
+            ...data.messageSent.map((d) => Number(d.blockNumber))
+          );
+          lastActivityBlockRef.current = Number.isFinite(maxBlock) ? maxBlock : lastActivityBlockRef.current;
+          setActivity((prev) => {
+            if (!prev) return data;
+            const merge = <T extends { id: string }>(a: T[], b: T[]) => {
+              const map = new Map<string, T>();
+              a.forEach((item) => map.set(item.id, item));
+              b.forEach((item) => map.set(item.id, item));
+              return Array.from(map.values()).sort((x, y) => Number(y.blockNumber) - Number(x.blockNumber));
+            };
+            return {
+              liquidityRebalanced: merge(prev.liquidityRebalanced, data.liquidityRebalanced),
+              feeUpdated: merge(prev.feeUpdated, data.feeUpdated),
+              agentActionExecuted: merge(prev.agentActionExecuted, data.agentActionExecuted),
+              messageSent: merge(prev.messageSent, data.messageSent),
+            };
+          });
         })
         .catch(() => {
           if (active) setActivity(null);
         });
 
-      fetchPositions()
+      fetchPositions(lastPositionsBlockRef.current)
         .then((data) => {
-          if (active) setPositions(data);
+          if (!active || !data) return;
+          const maxBlock = Math.max(
+            lastPositionsBlockRef.current,
+            ...data.map((d) => Number(d.blockNumber))
+          );
+          lastPositionsBlockRef.current = Number.isFinite(maxBlock) ? maxBlock : lastPositionsBlockRef.current;
+          setPositions((prev) => {
+            if (!prev) return data;
+            const map = new Map<string, SubgraphPosition>();
+            prev.forEach((item) => map.set(item.poolId, item));
+            data.forEach((item) => map.set(item.poolId, item));
+            return Array.from(map.values()).sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
+          });
         })
         .catch(() => {
           if (active) setPositions(null);
