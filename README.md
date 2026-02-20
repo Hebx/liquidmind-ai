@@ -80,6 +80,11 @@ liquidmind-ai/
 
 ## 🚀 Quick Start
 
+### Docs
+- `docs/DEPLOYMENT.md`
+- `docs/RUNBOOK.md`
+- `docs/SECURITY.md`
+
 ### Prerequisites
 - Node.js 18+
 - Foundry
