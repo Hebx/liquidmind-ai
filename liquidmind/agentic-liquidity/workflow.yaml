@@ -1,4 +1,4 @@
-staging-settings:
+staging:
   user-workflow:
     workflow-name: "liquidmind-staging"
   workflow-artifacts:
@@ -6,7 +6,7 @@ staging-settings:
     config-path: "./config.staging.json"
     secrets-path: ""
 
-production-settings:
+production:
   user-workflow:
     workflow-name: "liquidmind-production"
   workflow-artifacts:
