@@ -1,13 +1,11 @@
 /**
  * Price Feed Utilities
- * 
+ *
  * Fetches and caches token prices from multiple sources:
- * - Chainlink Price Feeds (primary)
- * - CoinGecko API (fallback)
- * - On-chain DEX quotes (secondary fallback)
+ * - Chainlink Price Feeds (primary) - mock for CRE WASM
+ * - CoinGecko API (fallback) - disabled in CRE WASM (no fetch)
+ * - Mock prices for symbols (CRE-safe)
  */
-
-import axios from "axios";
 
 // Token price cache
 interface PriceCache {
@@ -114,81 +112,49 @@ export class PriceFeedUtil {
   }
 
   /**
-   * Get price from Chainlink Price Feed
+   * Get price from Chainlink Price Feed (mock for CRE WASM compatibility)
    */
   private async getChainlinkPrice(tokenAddress: string): Promise<number> {
-    // Find feed address for token
-    const tokenSymbol = this.getTokenSymbol(tokenAddress);
-    const feedAddress = CHAINLINK_FEEDS[tokenSymbol];
-    
-    if (!feedAddress) {
-      throw new Error(`No Chainlink feed for ${tokenSymbol}`);
-    }
-
-    // In production: Use ethers.js or viem to call aggregator
-    // const price = await aggregator.latestRoundData()
-    
-    // Mock response for development
+    const tokenSymbol = this.getTokenSymbol(tokenAddress).toUpperCase();
     const mockPrices: Record<string, number> = {
-      "ETH": 3200.50,
-      "BTC": 67500.00,
+      "ETH": 3200.5,
+      "WETH": 3200.5,
+      "BTC": 67500.0,
+      "WBTC": 67500.0,
       "LINK": 18.75,
-      "USDC": 1.00,
+      "USDC": 1.0,
       "DAI": 0.9998,
-      "USDT": 1.00
+      "USDT": 1.0,
+      "UNI": 12.5
     };
-
-    const price = mockPrices[tokenSymbol];
-    if (!price) {
-      throw new Error(`No mock price for ${tokenSymbol}`);
+    const price = mockPrices[tokenSymbol] ?? mockPrices[tokenSymbol.slice(0, 6)];
+    if (price !== undefined) {
+      return price;
     }
-
-    console.log(`  🔗 Chainlink: ${tokenSymbol} = $${price}`);
-    return price;
+    throw new Error(`No Chainlink feed for ${tokenSymbol}`);
   }
 
   /**
-   * Get price from CoinGecko API
+   * Get price from CoinGecko API (skipped in CRE WASM - no fetch/axios)
    */
   private async getCoinGeckoPrice(tokenAddress: string): Promise<number> {
-    const tokenSymbol = this.getTokenSymbol(tokenAddress).toLowerCase();
-    
-    const headers: Record<string, string> = {};
-    if (this.coingeckoApiKey) {
-      headers["x-cg-pro-api-key"] = this.coingeckoApiKey;
-    }
-
-    const baseUrl = this.coingeckoApiKey 
-      ? "https://pro-api.coingecko.com/api/v3" 
-      : "https://api.coingecko.com/api/v3";
-
-    const response = await axios.get(
-      `${baseUrl}/simple/price?ids=${tokenSymbol}&vs_currencies=usd`,
-      { headers, timeout: 5000 }
-    );
-
-    const price = response.data[tokenSymbol]?.usd;
-    if (!price) {
-      throw new Error(`No CoinGecko price for ${tokenSymbol}`);
-    }
-
-    console.log(`  🦎 CoinGecko: ${tokenSymbol} = $${price}`);
-    return price;
+    // CRE WASM runtime does not support axios/fetch - always throw to use mock fallback
+    throw new Error(`CoinGecko not available in CRE WASM for ${tokenAddress}`);
   }
 
   /**
-   * Get token symbol from address
+   * Get token symbol from address or symbol
    */
-  private getTokenSymbol(address: string): string {
-    // Reverse lookup
+  private getTokenSymbol(addressOrSymbol: string): string {
+    const normalized = addressOrSymbol.toLowerCase();
+    // Reverse lookup by address
     for (const [symbol, addr] of Object.entries(TOKEN_ADDRESSES)) {
-      if (addr.toLowerCase() === address.toLowerCase()) {
-        return symbol;
-      }
+      if (addr.toLowerCase() === normalized) return symbol;
     }
-    
-    // Return address truncated if not found
-    return address.slice(0, 6);
+    // Already a symbol (e.g. WETH, USDC)
+    const upper = addressOrSymbol.toUpperCase();
+    if (TOKEN_ADDRESSES[upper]) return upper;
+    return upper.slice(0, 6);
   }
 
   /**

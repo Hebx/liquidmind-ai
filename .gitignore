@@ -11,6 +11,7 @@ dist/
 build/
 out/
 .cache/
+.cre_build_tmp.*
 
 # Environment files (DO NOT COMMIT)
 .env

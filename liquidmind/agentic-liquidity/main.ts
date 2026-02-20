@@ -1,6 +1,6 @@
 /**
  * Agentic Liquidity CRE Workflow
- * 
+ *
  * Implements the 6-step Chainlink CRE workflow for autonomous liquidity management:
  * 1. Intent Analysis
  * 2. Agent Coordination (A2A)
@@ -10,8 +10,8 @@
  * 6. Monitoring & Rebalancing
  */
 
-// CRE SDK (types provided by local stub during development)
-import { handler, httpTrigger } from "@chainlink/cre-sdk";
+import { cre, type Runtime } from "@chainlink/cre-sdk";
+import { Runner } from "@chainlink/cre-sdk";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
 
 // Workflow configuration
@@ -235,18 +235,24 @@ async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
   };
 }
 
-// HTTP trigger + handler (CRE docs: trigger → handler → callback)
-// NOTE: update trigger config to match latest CRE SDK if needed.
-const trigger = httpTrigger.trigger({
-  path: "/intent",
-  method: "POST"
-});
+// Config type for workflow
+interface Config {
+  schedule?: string;
+  httpTrigger?: { path: string; method: string };
+}
 
-export const agenticLiquidityWorkflow = handler(trigger, async (_runtime: unknown, req: any) => {
-  const intent: LiquidityIntent = req?.body ?? req?.payload ?? req;
-  if (!intent) {
-    throw new Error("Missing intent payload");
-  }
+// Cron-triggered liquidity workflow (Runner pattern)
+const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> => {
+  // Default demo intent for cron-triggered runs
+  const intent: LiquidityIntent = {
+    action: "deposit",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 1000000n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5
+  };
 
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state);
@@ -257,10 +263,21 @@ export const agenticLiquidityWorkflow = handler(trigger, async (_runtime: unknow
   state = await monitorPosition(state);
 
   return state;
-});
+};
 
-// Export workflow runner (local simulation)
-export async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowState> {
+const initWorkflow = (config: Config) => {
+  const cron = new cre.capabilities.CronCapability();
+  const schedule = (config as { schedule?: string }).schedule ?? "*/30 * * * * *";
+  return [cre.handler(cron.trigger({ schedule }), onCronTrigger)];
+};
+
+export async function main() {
+  const runner = await Runner.newRunner<Config>();
+  await runner.run(initWorkflow);
+}
+
+// Workflow runner for local simulation (not exported - Javy rejects exported fns with params)
+async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowState> {
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state);
   state = await coordinateAgents(state);
@@ -359,12 +376,11 @@ interface TransactionReceipt {
 
 async function waitForConfirmation(_hash: string): Promise<TransactionReceipt> {
   void _hash;
-  // In production: Poll for transaction receipt
-  await new Promise(r => setTimeout(r, 2000));
+  // In production: Poll for transaction receipt (CRE WASM has no setTimeout)
   return {
     status: true,
     logs: [{
-      topics: [`pos-${Date.now()}`]
+      topics: [`pos-${Date.now()}`, `0x${Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join("")}`]
     }]
   };
 }
@@ -380,5 +396,3 @@ async function scheduleRebalanceCheck(_positionId: string, config: RebalanceConf
   console.log(`  ⏰ Rebalancing scheduled (interval: ${config.interval}s, threshold: ${config.threshold}%)`);
 }
 
-// Export types
-export type { LiquidityIntent, AgentConsensus, WorkflowState };

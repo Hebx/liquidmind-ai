@@ -1,4 +1,5 @@
 {
+  "schedule": "*/30 * * * * *",
   "httpTrigger": {
     "path": "/intent",
     "method": "POST",

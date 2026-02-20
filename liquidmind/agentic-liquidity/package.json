@@ -6,6 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "cre-compile": "bunx cre-compile ./main.ts .cre_build_tmp.wasm",
+    "postinstall": "bunx cre-setup",
     "dev": "tsx src/agentic-liquidity.ts",
     "simulate": "tsx src/mock-workflow.ts",
     "test": "jest",
@@ -23,7 +25,7 @@
   "author": "Hebx",
   "license": "MIT",
   "dependencies": {
-    "@chainlink/cre-sdk": "file:./cre-sdk-stub",
+    "@chainlink/cre-sdk": "^1.1.1",
     "axios": "^1.6.0"
   },
   "devDependencies": {
