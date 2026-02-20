@@ -2,7 +2,7 @@ staging-settings:
   user-workflow:
     workflow-name: "liquidmind-staging"
   workflow-artifacts:
-    workflow-path: "./src/agentic-liquidity.ts"
+    workflow-path: "./main.ts"
     config-path: "./config.staging.json"
     secrets-path: ""
 
@@ -10,6 +10,6 @@ production-settings:
   user-workflow:
     workflow-name: "liquidmind-production"
   workflow-artifacts:
-    workflow-path: "./src/agentic-liquidity.ts"
+    workflow-path: "./main.ts"
     config-path: "./config.production.json"
     secrets-path: ""
