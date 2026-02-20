@@ -38,10 +38,13 @@ cp .env.example .env
 ```
 
 Key required variables:
-- `CRE_API_KEY` / `CRE_API_SECRET` - From Chainlink CRE dashboard
+- `CRE_API_KEY` - From Chainlink CRE dashboard
+- `CRE_GATEWAY_URL` - From CRE Gateway endpoints
+- `CRE_WORKFLOW_ID` - From CRE dashboard after deploy
 - `PRIVATE_KEY` - Dedicated workflow wallet (keep secure!)
-- `ETHEREUM_RPC_URL` - Alchemy/Infura endpoint
-- `X402_API_KEY` - From x402 protocol
+- `BASE_SEPOLIA_RPC` - RPC endpoint
+- `X402_FACILITATOR_URL` - x402 facilitator
+- `AGENT_TREASURY_ADDRESS` - Treasury wallet
 
 ## 🛠️ Usage
 
@@ -55,6 +58,18 @@ npm run build
 
 ```bash
 npm run dev
+```
+
+### CRE CLI (latest)
+```bash
+# login
+cre login
+
+# deploy workflow
+cre workflows deploy dist/agentic-liquidity.js
+
+# list workflows (get CRE_WORKFLOW_ID)
+cre workflows list
 ```
 
 ### Run Mock Simulation (Testing)

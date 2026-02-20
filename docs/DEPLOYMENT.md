@@ -10,6 +10,7 @@ Single-chain MVP on **Base Sepolia** with Goldsky subgraph + Next.js frontend.
 - WalletConnect project id
 
 ## Environment
+MVP is **Base Sepolia only**.
 Create `.env` at repo root (for contracts/subgraph) and `.env.local` in frontend.
 
 ### Root `.env` (contracts)

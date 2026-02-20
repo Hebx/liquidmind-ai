@@ -84,6 +84,7 @@ liquidmind-ai/
 - `docs/DEPLOYMENT.md`
 - `docs/RUNBOOK.md`
 - `docs/SECURITY.md`
+- `docs/CRE.md`
 
 ### Prerequisites
 - Node.js 18+
