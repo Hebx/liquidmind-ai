@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "name": "liquidmind-hook",
+  "abis": {
+    "AgenticLiquidityHook": { "path": "/home/openclaw/clawd/projects/liquidmind-ai/subgraph/abis/AgenticLiquidityHook.json" }
+  },
+  "instances": [
+    {
+      "abi": "AgenticLiquidityHook",
+      "address": "0x15b60e98a00d83BA4B010CceDb09864d1d93d0c0",
+      "startBlock": 1,
+      "chain": "base-sepolia"
+    }
+  ]
+}

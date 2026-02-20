@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "name": "liquidmind-coordinator",
+  "abis": {
+    "LiquidMindCoordinator": { "path": "/home/openclaw/clawd/projects/liquidmind-ai/subgraph/abis/LiquidMindCoordinator.json" }
+  },
+  "instances": [
+    {
+      "abi": "LiquidMindCoordinator",
+      "address": "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA",
+      "startBlock": 1,
+      "chain": "base-sepolia"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import IntentForm from '@/components/IntentForm';
 import AgentStatus from '@/components/AgentStatus';
 import PositionCard from '@/components/PositionCard';
+import { fetchActivity, SubgraphActivity } from '@/lib/subgraph';
 
 type Overview = {
   ok: boolean;
@@ -21,6 +22,7 @@ type Overview = {
 
 export default function Home() {
   const [overview, setOverview] = useState<Overview>({ ok: false });
+  const [activity, setActivity] = useState<SubgraphActivity | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -32,8 +34,28 @@ export default function Home() {
       .catch(() => {
         if (active) setOverview({ ok: false });
       });
+
+    fetchActivity()
+      .then((data) => {
+        if (active) setActivity(data);
+      })
+      .catch(() => {
+        if (active) setActivity(null);
+      });
+
+    const interval = setInterval(() => {
+      fetchActivity()
+        .then((data) => {
+          if (active) setActivity(data);
+        })
+        .catch(() => {
+          if (active) setActivity(null);
+        });
+    }, 15000);
+
     return () => {
       active = false;
+      clearInterval(interval);
     };
   }, []);
 
@@ -160,6 +182,69 @@ export default function Home() {
                 <p className="text-[10px] font-mono text-text-muted uppercase">Identity</p>
                 <p className="text-sm font-mono text-magenta mt-2">VERIFIED AI</p>
               </div>
+            </div>
+
+            <div className="card-brutal-cyan">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-2xl tracking-widest text-cyan">RECENT ACTIVITY</h3>
+                <span className="text-[10px] font-mono text-text-secondary">SUBGRAPH</span>
+              </div>
+
+              {!activity && (
+                <div className="text-xs font-mono text-text-muted">Waiting for subgraph data…</div>
+              )}
+
+              {activity && (
+                <div className="space-y-4">
+                  <div className="border-[var(--border-thin)] border-cyan/40 p-3">
+                    <div className="text-[10px] font-mono text-text-secondary">LIQUIDITY REBALANCED</div>
+                    {activity.liquidityRebalanced.length === 0 && (
+                      <div className="text-xs font-mono text-text-muted">No events yet</div>
+                    )}
+                    {activity.liquidityRebalanced.map((item) => (
+                      <div key={item.id} className="text-xs font-mono text-cyan mt-2">
+                        Pool {item.poolId.slice(0, 6)}… • {item.newTickLower} → {item.newTickUpper}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-[var(--border-thin)] border-magenta/40 p-3">
+                    <div className="text-[10px] font-mono text-text-secondary">FEE UPDATES</div>
+                    {activity.feeUpdated.length === 0 && (
+                      <div className="text-xs font-mono text-text-muted">No events yet</div>
+                    )}
+                    {activity.feeUpdated.map((item) => (
+                      <div key={item.id} className="text-xs font-mono text-magenta mt-2">
+                        Pool {item.poolId.slice(0, 6)}… → {item.newFee} bps
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-[var(--border-thin)] border-lime/40 p-3">
+                    <div className="text-[10px] font-mono text-text-secondary">AGENT ACTIONS</div>
+                    {activity.agentActionExecuted.length === 0 && (
+                      <div className="text-xs font-mono text-text-muted">No events yet</div>
+                    )}
+                    {activity.agentActionExecuted.map((item) => (
+                      <div key={item.id} className="text-xs font-mono text-lime mt-2">
+                        {item.actionType} • {item.actionId.slice(0, 8)}…
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-[var(--border-thin)] border-border p-3">
+                    <div className="text-[10px] font-mono text-text-secondary">MESSAGES</div>
+                    {activity.messageSent.length === 0 && (
+                      <div className="text-xs font-mono text-text-muted">No events yet</div>
+                    )}
+                    {activity.messageSent.map((item) => (
+                      <div key={item.id} className="text-xs font-mono text-text-primary mt-2">
+                        → Chain {item.destinationChainSelector} · Fees {item.fees}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
