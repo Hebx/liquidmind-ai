@@ -8,7 +8,12 @@ const agents = [
   { name: 'YIELD AGGREGATOR', status: 'APY scan', color: 'text-lime', pulse: 'bg-lime' },
 ];
 
-export default function AgentStatus() {
+type AgentStatusProps = {
+  agentCount?: string;
+  coordinator?: string;
+};
+
+export default function AgentStatus({ agentCount, coordinator }: AgentStatusProps) {
   return (
     <div className="card-brutal-cyan relative overflow-hidden">
       <div className="absolute -top-6 -right-6 w-20 h-20 border-[var(--border-thick)] border-cyan opacity-20" />
@@ -34,8 +39,14 @@ export default function AgentStatus() {
         </div>
 
         <div className="mt-6 pt-4 border-t border-cyan/30 flex items-center justify-between">
-          <span className="text-[10px] font-mono text-text-secondary">PROTOCOL HEALTH</span>
-          <span className="text-[10px] font-mono text-cyan">SECURE</span>
+          <span className="text-[10px] font-mono text-text-secondary">COORDINATOR</span>
+          <span className="text-[10px] font-mono text-cyan">
+            {coordinator ? coordinator.slice(0, 6) + '…' + coordinator.slice(-4) : 'UNSYNCED'}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[10px] font-mono text-text-secondary">AGENTS</span>
+          <span className="text-[10px] font-mono text-lime">{agentCount ?? '0'}</span>
         </div>
       </div>
     </div>

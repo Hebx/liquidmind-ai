@@ -1,11 +1,42 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useEffect, useState } from 'react';
 import IntentForm from '@/components/IntentForm';
 import AgentStatus from '@/components/AgentStatus';
 import PositionCard from '@/components/PositionCard';
 
+type Overview = {
+  ok: boolean;
+  blockNumber?: string;
+  coordinatorDeployed?: boolean;
+  hookDeployed?: boolean;
+  agentCount?: string;
+  localHook?: string;
+  hookOwner?: string;
+  hookCoordinator?: string;
+  coordinatorAddress?: string;
+  hookAddress?: string;
+};
+
 export default function Home() {
+  const [overview, setOverview] = useState<Overview>({ ok: false });
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/overview')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) setOverview(data);
+      })
+      .catch(() => {
+        if (active) setOverview({ ok: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <main className="min-h-screen bg-bg-primary text-text-primary">
       {/* Top Bar */}
@@ -20,7 +51,12 @@ export default function Home() {
               <div className="text-[10px] font-mono text-text-secondary">AUTONOMOUS LIQUIDITY ENGINE</div>
             </div>
           </div>
-          <ConnectButton />
+          <div className="flex items-center gap-4">
+            <div className="text-[10px] font-mono text-text-muted">
+              BLOCK {overview.blockNumber ?? '—'}
+            </div>
+            <ConnectButton />
+          </div>
         </div>
       </div>
 
@@ -61,9 +97,9 @@ export default function Home() {
               <div className="text-[10px] font-mono text-text-muted">EXECUTION RAIL</div>
               <div className="mt-6 space-y-4">
                 {[
-                  { step: 'INTENT PARSE', status: 'OK', color: 'text-lime' },
-                  { step: 'RISK MODEL', status: '58/100', color: 'text-cyan' },
-                  { step: 'ROUTE BUILD', status: '2 CHAINS', color: 'text-magenta' },
+                  { step: 'INTENT PARSE', status: overview.ok ? 'OK' : 'SYNCING', color: 'text-lime' },
+                  { step: 'COORDINATOR', status: overview.coordinatorDeployed ? 'LIVE' : 'OFFLINE', color: 'text-cyan' },
+                  { step: 'HOOK', status: overview.hookDeployed ? 'LIVE' : 'OFFLINE', color: 'text-magenta' },
                   { step: 'ESCROW', status: 'LOCKED', color: 'text-lime' },
                 ].map((s) => (
                   <div key={s.step} className="flex items-center justify-between border-[var(--border-thin)] border-border p-3">
@@ -80,7 +116,7 @@ export default function Home() {
           {/* Left column */}
           <div className="lg:col-span-4 space-y-8">
             <IntentForm />
-            <AgentStatus />
+            <AgentStatus agentCount={overview.agentCount} coordinator={overview.coordinatorAddress} />
           </div>
 
           {/* Right column */}
@@ -98,14 +134,15 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <PositionCard pair="ETH/USDC" chain="Base Sepolia · Uniswap v4" value="$84,200" apy="24.2%" status="OPTIMIZED" />
-                <PositionCard pair="LINK/ETH" chain="Arbitrum Sepolia" value="$57,869" apy="18.5%" status="REBALANCING" />
+                <PositionCard pair="ETH/USDC" chain={`Base Sepolia · ${overview.hookAddress ? 'Hook Live' : 'Hook Pending'}`} value="$84,200" apy="24.2%" status="OPTIMIZED" />
+                <PositionCard pair="LINK/ETH" chain={`Coordinator ${overview.coordinatorDeployed ? 'Live' : 'Offline'}`} value="$57,869" apy="18.5%" status="REBALANCING" />
               </div>
 
               <div className="mt-6 border-[var(--border-thin)] border-lime/40 p-4">
                 <div className="text-[10px] font-mono text-text-secondary">AGENT INSIGHT</div>
                 <p className="text-sm text-text-primary mt-2">
-                  Risk Manager suggests rebalancing LINK/ETH due to volatility spike on Arbitrum Sepolia.
+                  Hook owner: {overview.hookOwner ? overview.hookOwner.slice(0, 6) + '…' + overview.hookOwner.slice(-4) : '—'} ·
+                  Coordinator: {overview.hookCoordinator ? overview.hookCoordinator.slice(0, 6) + '…' + overview.hookCoordinator.slice(-4) : '—'}
                 </p>
               </div>
             </div>
@@ -131,7 +168,10 @@ export default function Home() {
       <footer className="border-t-[var(--border-thick)] border-border py-10">
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <div className="text-xs font-mono text-text-secondary">LIQUIDMIND © 2026</div>
-          <div className="text-xs font-mono text-text-muted">INTELLIGENT LIQUIDITY · AUTONOMOUS EXECUTION</div>
+          <div className="text-xs font-mono text-text-muted">
+            COORDINATOR {overview.coordinatorAddress ? overview.coordinatorAddress.slice(0, 6) + '…' + overview.coordinatorAddress.slice(-4) : '—'} ·
+            HOOK {overview.hookAddress ? overview.hookAddress.slice(0, 6) + '…' + overview.hookAddress.slice(-4) : '—'}
+          </div>
         </div>
       </footer>
     </main>
