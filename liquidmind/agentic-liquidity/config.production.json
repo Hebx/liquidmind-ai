@@ -1,0 +1,12 @@
+{
+  "httpTrigger": {
+    "path": "/intent",
+    "method": "POST",
+    "authorizedKeys": [
+      {
+        "type": "KEY_TYPE_ECDSA_EVM",
+        "publicKey": "0x46Ca9120Ea33E7AF921Db0a230831CB08AeB2910"
+      }
+    ]
+  }
+}
