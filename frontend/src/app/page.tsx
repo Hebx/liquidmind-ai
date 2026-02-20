@@ -26,6 +26,7 @@ export default function Home() {
   const [activity, setActivity] = useState<SubgraphActivity | null>(null);
   const [positions, setPositions] = useState<SubgraphPosition[] | null>(null);
   const [metaBlock, setMetaBlock] = useState<number | null>(null);
+  const [chainHead, setChainHead] = useState<number | null>(null);
   const lastMetaBlockRef = useRef<number | null>(null);
   const lastActivityBlockRef = useRef<number>(0);
   const lastPositionsBlockRef = useRef<number>(0);
@@ -40,6 +41,15 @@ export default function Home() {
       })
       .catch(() => {
         if (active) setOverview({ ok: false });
+      });
+
+    fetch('/api/chain-head')
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data.ok) setChainHead(Number(data.blockNumber));
+      })
+      .catch(() => {
+        if (active) setChainHead(null);
       });
 
     const refreshAll = async () => {
@@ -112,6 +122,14 @@ export default function Home() {
 
     const interval = setInterval(() => {
       refreshAll();
+      fetch('/api/chain-head')
+        .then((res) => res.json())
+        .then((data) => {
+          if (active && data.ok) setChainHead(Number(data.blockNumber));
+        })
+        .catch(() => {
+          if (active) setChainHead(null);
+        });
     }, 15000);
 
     return () => {
@@ -287,6 +305,9 @@ export default function Home() {
                 <div className="border-[var(--border-thin)] border-border p-3">
                   <div className="text-[10px] font-mono text-text-muted">SUBGRAPH</div>
                   <div className="text-xs font-mono text-cyan">BLOCK {metaBlock ?? '—'}</div>
+                  <div className="text-[10px] font-mono text-text-muted mt-1">
+                    LAG {metaBlock && chainHead ? Math.max(chainHead - metaBlock, 0) : '—'}
+                  </div>
                 </div>
                 <div className="border-[var(--border-thin)] border-border p-3">
                   <div className="text-[10px] font-mono text-text-muted">LAST EVENT</div>

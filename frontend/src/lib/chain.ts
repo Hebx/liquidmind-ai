@@ -43,3 +43,15 @@ export async function getOverview() {
     hookAddress: HOOK_ADDRESS,
   } as const;
 }
+
+export async function getChainHead() {
+  if (!RPC_URL) {
+    return { ok: false, error: 'Missing RPC' } as const;
+  }
+  const client = createPublicClient({
+    chain: baseSepolia,
+    transport: http(RPC_URL),
+  });
+  const blockNumber = await client.getBlockNumber();
+  return { ok: true, blockNumber: blockNumber.toString() } as const;
+}
