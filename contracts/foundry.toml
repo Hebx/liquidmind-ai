@@ -22,6 +22,7 @@ remappings = [
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"
 sepolia = "${SEPOLIA_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC}"
 arbitrum = "${ARBITRUM_RPC_URL}"
 optimism = "${OPTIMISM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
