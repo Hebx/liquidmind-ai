@@ -1,105 +1,43 @@
-# LIQUIDMIND Deployment Status
+# Deployment Status
 
 **Last updated:** February 21, 2026
 
----
+## Deployed Contracts (Base Sepolia)
 
-## 🚦 CRE Workflow Status
+| Contract | Address | Verified |
+|----------|---------|----------|
+| **LiquidMindCoordinator** | `0x268c2E3D23f5cDDAA0D0B40142053414cC05991b` | Yes |
+| **AgenticLiquidityHook** | `0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0` | Yes |
+| **PoolModifyLiquidityTest** | `0xDcCe2F8543D13989De483b11F0eae9ba9cD38626` | — |
+| **PoolSwapTest** | `0x6c2e4d949609BAdEE9eB29A1F99baFFfef497480` | — |
 
-- **Simulation:** ✅ Available now — no approval required ([CRE: Build and simulate](https://docs.chain.link/cre))
-- **Deployment:** ⏸️ Early access; run `cre workflow deploy agentic-liquidity --target staging` from `liquidmind/` once approved
+**PoolManager (Uniswap v4):** `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408`
 
-### Run simulation (satisfies hackathon “successful simulation via CRE CLI”)
+## Live Pool
 
-```bash
-cd liquidmind
-cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
-```
+- **Pair:** USDC/WETH
+- **Fee:** `DYNAMIC_FEE_FLAG` (0x800000) — hook controls fee via `beforeSwap`
+- **Tick Spacing:** 60
+- **PoolId:** `0xf6bc640ca8176014c0ae5e3734845427d1c9a40b0fac3395e7a383dcd51f8743`
 
-Simulation compiles the workflow to WASM and runs it locally with **real** calls to APIs and blockchains ([CRE execution lifecycle](https://docs.chain.link/cre)).
+## CRE Workflow
 
-**Trigger index:** `0` = cron (only handler for now). Same pattern as [CRE & x402 workshop](https://youtu.be/r7VKS5L47f0): handler = trigger + callback; multiple triggers would use index 1, 2, …
+- **Simulation:** Confirmed working — reads live Chainlink feeds via EVMClient
+- **Volatility Oracle:** Reads 5+ historical rounds, computes annualized volatility
+- **Actions:** Outputs both `rebalance` and `updateFee` calldata
 
-### Capture simulation evidence (for submission)
+## On-Chain Hook State
 
-```bash
-cd liquidmind
-cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0 2>&1 | tee simulation-output.txt
-```
+| Metric | Value |
+|--------|-------|
+| Dynamic Fee (EMA) | 10000 (1.00% — max, due to test swap volatility) |
+| Config baseFee | 5000 (updated via CRE) |
+| Volatility EMA | 96,320 avg ticks |
+| Active Position | [-77100, -74700] (CRE-computed) |
+| Coordinator LINK | 5.0 LINK |
 
-Attach `simulation-output.txt` or a screenshot showing "Simulation result" / user logs to your submission or README.
+## Test Results
 
-**Status:** ✅ Simulation completed successfully (WETH/USDC intent → A2A coordination → optimal pool → x402 escrow → position + rebalancing + **volatility oracle → dynamic fee update**). Output saved for submission.
-
----
-
-## ✅ Deployed (Base Sepolia)
-
-| Component | Address | Status |
-|-----------|---------|--------|
-| **LiquidMindCoordinator** | `0x268c2E3D23f5cDDAA0D0B40142053414cC05991b` | ✅ Live |
-| **AgenticLiquidityHook** | `0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0` | ✅ Live |
-
-**RPC:** `https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY`
-
----
-
-## ⏸️ CRE Workflow Deploy — Prerequisites
-
-### 1. Link your wallet (required first)
-```bash
-cd liquidmind
-cre account link-key --owner-label "Liquidmind" --yes
-```
-**Requires:** `CRE_ETH_PRIVATE_KEY` in `.env` with **ETH on Ethereum Mainnet** (for gas).
-
-### 2. Deploy workflow (interactive)
-```bash
-cd liquidmind
-cre workflow deploy agentic-liquidity --target staging
-```
-**Note:** Run without `--yes` to use interactive prompts. Early access approval may be required.
-
-### Contract Re-deploy
-- **Status:** Not needed — contracts already deployed
-- **Note:** Re-deploy would fail with CreateCollision (same salt)
-
----
-
-## 🔧 Environment Summary
-
-### Frontend (`frontend/.env.local`)
-```
-NEXT_PUBLIC_COORDINATOR_ADDRESS=0x268c2E3D23f5cDDAA0D0B40142053414cC05991b
-NEXT_PUBLIC_HOOK_ADDRESS=0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0
-NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/...
-```
-
-### Liquidmind / Agentic-Liquidity
-- `BASE_SEPOLIA_RPC`, `CRE_ETH_PRIVATE_KEY`, `PRIVATE_KEY` configured
-- Contract addresses in `.env`
-
----
-
-## Milestone 2: Dynamic Fee from Live Volatility Oracle
-
-**Status:** ✅ Complete — executing on-chain
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| Volatility Oracle | Reads 5+ historical Chainlink rounds via `getRoundData()` | ✅ Live |
-| Annualized Vol Calc | Log-return std dev × sqrt(periods/year) | ✅ |
-| Fee Tier Mapping | vol→fee: <20%→500, <40%→3000, <80%→5000, <120%→8000, ≥120%→10000 | ✅ |
-| CRE `updateFee` Action | Builds `executeLocalHookAction(updateFee)` calldata | ✅ |
-| On-chain Execution | `Coordinator→Hook._executeFeeUpdate()` updates `baseFee` | ✅ Confirmed |
-| Fork Test | `test_Fork_ExecuteLocalHookAction_UpdateFee` + `test_Fork_ChainlinkHistoricalRounds` | ✅ 16/16 |
-| E2E Script Step 7 | Automatic pool config seeding + fee update submission | ✅ 12/12 |
-
----
-
-## Next Steps
-
-1. **Demo video:** Record 3–5 min showing simulation (and optionally frontend); add link to README.
-2. **Repo:** Make repository public before submission deadline.
-3. **CRE deploy (optional):** When early access is granted, run `cre workflow deploy agentic-liquidity --target staging` and add workflow ID to this doc.
-4. **Integration:** Wire frontend/agents to CRE endpoint when deployed; subgraph if needed for UI.
+- **Fork Tests:** 16/16 passing
+- **E2E Suite:** 12/12 passing
+- **Testnet Flow:** 12 confirmed on-chain transactions

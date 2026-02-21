@@ -1,60 +1,48 @@
-# CRE (Chainlink Runtime Environment)
+# CRE Workflow Guide
 
-Reference: [CRE docs](https://docs.chain.link/cre) · Workshop: [CRE & x402 masterclass (Base & Chainlink)](https://youtu.be/r7VKS5L47f0)
+Reference: [CRE docs](https://docs.chain.link/cre)
 
-## Requirements
+## Overview
 
-- CRE CLI installed (latest): `cre version`
-- CRE account at [cre.chain.link](https://cre.chain.link)
-- For deploy: early access approval; for submission, **simulation is sufficient** (no approval needed)
+The LiquidMind CRE workflow runs as a WASM module on the Chainlink DON. It reads live Chainlink price feeds via `EVMClient`, computes optimal liquidity parameters, and outputs calldata for on-chain execution.
 
-## Trigger–callback model (workshop alignment)
-
-- Workflows = array of **handlers**; each handler = **trigger** + **callback**.
-- Our workflow: **one handler** — cron trigger → 6-step liquidity callback.
-- **Trigger index for simulate:** `0` = cron (default). When you add an HTTP trigger, `1` = HTTP.
-- Simulation compiles to WASM and runs **real** API/chain calls locally ([CRE execution lifecycle](https://docs.chain.link/cre)).
-
-## Env (liquidmind / agentic-liquidity)
-
-```
-BASE_SEPOLIA_RPC=<rpc>
-CRE_ETH_PRIVATE_KEY=<key with ETH on mainnet for deploy>
-PRIVATE_KEY=<key for coordinator/hook interactions>
-# After deploy (optional):
-CRE_WORKFLOW_ID=<from cre workflow deploy>
-CRE_GATEWAY_URL=<from cre dashboard>
-X402_FACILITATOR_URL=https://facilitator.x402.org
-```
-
-## CLI flow
-
-### Simulate (no approval; use for hackathon evidence)
-
-```bash
-cd liquidmind
-cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
-```
-
-Save the command output (or a screenshot) as **simulation evidence** for submission.
-
-### Deploy (early access)
+## Simulate
 
 ```bash
 cd liquidmind
 cre login
-cre account link-key --owner-label "Liquidmind" --yes
-cre workflow deploy agentic-liquidity --target staging
-cre workflows list   # workflow ID + gateway
+cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
 ```
 
-## Project layout
+Trigger index `0` = cron (the only handler). Simulation compiles to WASM and executes real on-chain reads.
+
+## Deploy (Early Access)
+
+```bash
+cd liquidmind
+cre account link-key --owner-label "Liquidmind" --yes
+cre workflow deploy agentic-liquidity --target staging
+```
+
+Requires `CRE_ETH_PRIVATE_KEY` with ETH on Ethereum Mainnet (for CRE registry gas).
+
+## Workflow Steps
+
+1. **analyzeIntent** — Fetch live ETH/USD from Chainlink, compute tick range from price + risk tolerance
+2. **Volatility Oracle** — Read 5+ historical `getRoundData()` rounds, compute annualized volatility, map to fee tier
+3. **coordinateAgents** — Multi-agent consensus (route optimizer, risk analyzer, yield aggregator)
+4. **assessRisk** — Validate risk score against tolerance threshold
+5. **executeWithPayment** — x402 escrow lock + liquidity deployment
+6. **monitorPosition** — Output rebalance + updateFee calldata for on-chain submission
+
+## Configuration
 
 - **Workflow code:** `liquidmind/agentic-liquidity/main.ts`
-- **Config:** `liquidmind/project.yaml` (RPCs), `liquidmind/agentic-liquidity/config.staging.json` (schedule)
-- **Chain name (Base Sepolia):** `ethereum-testnet-sepolia-base-1` in `project.yaml`
+- **Price feeds:** `liquidmind/agentic-liquidity/src/utils/price-feed.ts`
+- **Target config:** `liquidmind/project.yaml` (RPCs for Base Sepolia + Ethereum Mainnet)
+- **Schedule:** `liquidmind/agentic-liquidity/config.staging.json`
 
-## Notes
+## Chain Names
 
-- MVP is **Base Sepolia** for contracts; staging RPCs include mainnet for CRE registry when deploying.
-- x402: payment-in-request (HTTP 402); our flow supports escrow-style execution; full x402 can be added for pay-per-trigger.
+- Base Sepolia: `ethereum-testnet-sepolia-base-1`
+- Ethereum Mainnet: `ethereum-mainnet` (required for CRE registry when deploying)

@@ -1,42 +1,40 @@
-# Demo Video Script (3–5 min)
+# Demo Video Script (3-5 min)
 
-Use this to record the Convergence submission video. Show workflow execution as part of the app or via the CRE CLI.
+## 1. Intro (30s)
 
----
+- LiquidMind: AI-driven liquidity management using Chainlink CRE and Uniswap v4 hooks
+- Show architecture: CRE workflow reads Chainlink feeds → computes optimal params → executes on hook
 
-## 1. Intro (30–45 s)
+## 2. CRE Workflow Simulation (2 min)
 
-- **Say:** LiquidMind — AI-driven liquidity management using Chainlink CRE and Uniswap v4 hooks.
-- **Show:** README or architecture diagram (intent → A2A agents → CRE workflow → x402 → hook).
-- **Say:** We have contracts on Base Sepolia and a CRE workflow that we run via simulation (and can deploy when early access is granted).
+```bash
+cd liquidmind
+cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
+```
 
----
+Highlight in output:
+- Live Chainlink price read via EVMClient
+- Volatility oracle: historical rounds → annualized vol → fee tier
+- Rebalance calldata + updateFee calldata in output
 
-## 2. CRE workflow simulation (1.5–2 min)
+## 3. On-Chain Execution (1.5 min)
 
-- **Do:** From repo root: `cd liquidmind && cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0`
-- **Show:** Terminal output: intent analysis, A2A coordination (Route Optimizer, Risk Analyzer, Yield Aggregator), risk check, opportunity discovery, x402 escrow, position ID, rebalancing.
-- **Say:** Simulation compiles to WASM and runs the full 6-step flow; this satisfies the hackathon “successful simulation via CRE CLI” requirement.
+Show the e2e-live.sh output or run it live:
+- Chainlink feed verification
+- Contract wiring checks
+- CRE → Coordinator → Hook rebalance (on-chain tx)
+- CRE → Coordinator → Hook updateFee (on-chain tx)
+- 12/12 checks passing
 
----
+## 4. Hook State Verification (30s)
 
-## 3. Contracts / frontend (optional, 1–2 min)
+Show `cast call` results:
+- Dynamic fee from EMA
+- Active position (CRE-computed ticks)
+- Pool config (baseFee updated by CRE)
 
-- **Show:** Base Sepolia deployment (coordinator + hook addresses in DEPLOYMENT_STATUS or block explorer).
-- **Or:** Frontend (`npm run dev` in `frontend/`) — connect wallet, show intent form and agent status (if wired).
+## 5. Wrap (30s)
 
----
-
-## 4. Wrap (30 s)
-
-- **Say:** Repo is public (or will be); README links to all Chainlink-related files; simulation output is saved for submission.
-- **Say:** Built for the Chainlink Convergence Hackathon — CRE & AI track.
-
----
-
-## Checklist before recording
-
-- [ ] CRE CLI works: `cre version` and simulate command run successfully
-- [ ] Simulation output or screenshot ready to reference
-- [ ] README and docs/DEPLOYMENT_STATUS.md up to date
-- [ ] Record in one take or cut to 3–5 min; upload to YouTube (unlisted OK); add link to README Demo section
+- Fully executing Uniswap v4 hook with Chainlink CRE
+- Volatility oracle from live price feed history
+- All features verified on Base Sepolia with real funds

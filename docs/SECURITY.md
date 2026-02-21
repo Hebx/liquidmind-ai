@@ -1,19 +1,30 @@
-# Security — LIQUIDMIND
+# Security
 
-## Scope
-- Uniswap v4 hook execution
-- Agent → Coordinator authorization
-- Cross-chain messaging (CCIP)
-- Subgraph integrity
+## Access Control
 
-## Current Controls
-- Owner-only coordination in Hook
-- Authorized agents via Coordinator registry
-- Subgraph read-only from on-chain events
+| Role | Enforced By | Scope |
+|------|-------------|-------|
+| **PoolManager** | `onlyPoolManager` modifier | All hook callbacks |
+| **Coordinator** | `onlyCoordinator` modifier | `executeAgentAction`, `receiveCrossChainSignal` |
+| **Owner** | `onlyOwner` modifier | `setAgentCoordinator`, `setPoolConfig`, `transferOwnership` |
+| **Agents** | `onlyAgent` modifier on Coordinator | `executeLocalHookAction` |
 
-## TODO Before Prod
-- Formal access control review
-- Rate limiting on agent actions
-- Reentrancy/DoS review for hook callbacks
-- Escrow enforcement (x402)
-- Monitoring + alerting
+## Hook Design
+
+- All hook callbacks verify `msg.sender == address(poolManager)`
+- `executeAgentAction` uses action ID deduplication (`executedActions` mapping) to prevent replay
+- Fee updates are bounded by `[minFee, maxFee]` from pool config
+- Tick ranges validated: `upper > lower`
+
+## Agent Registry
+
+- Agents registered via `Coordinator.registerAgent()` (owner-only)
+- `getAgent()` returns `(isAuthorized, reputation, registeredAt)`
+- Hook queries coordinator via `staticcall` for agent authorization
+
+## Known Limitations (Testnet)
+
+- No timelock on owner actions
+- No multi-sig — single owner key
+- Agent reputation is static (set at registration, not updated)
+- Cross-chain signals not yet rate-limited

@@ -1,4 +1,8 @@
-# LIQUIDMIND - Intelligent Liquidity, Autonomous Execution
+# Environment files (secrets — NEVER commit)
+.env
+.env.local
+.env.*.local
+*.env
 
 # Dependencies
 node_modules/
@@ -13,10 +17,19 @@ out/
 .cache/
 .cre_build_tmp.*
 
-# Environment files (DO NOT COMMIT)
-.env
-.env.local
-.env.*.local
+# Next.js
+.next/
+.vercel/
+
+# Foundry
+cache/
+contracts/cache/
+contracts/out/
+contracts/broadcast/
+
+# Subgraph
+subgraph/build/
+subgraph/generated/
 
 # IDE
 .vscode/
@@ -39,15 +52,6 @@ yarn-error.log*
 # Testing
 coverage/
 .nyc_output/
-
-# Foundry (Solidity)
-cache/
-out/
-broadcast/
-
-# Hardhat (if used)
-typechain/
-typechain-types/
 
 # Misc
 *.pid

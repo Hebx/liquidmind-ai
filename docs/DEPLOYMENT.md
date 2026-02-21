@@ -1,56 +1,63 @@
-# Deployment — LIQUIDMIND (MVP)
+# Deployment Guide
 
-## Overview
-Single-chain MVP on **Base Sepolia** with Goldsky subgraph + Next.js frontend.
+## Prerequisites
 
-## Prereqs
-- Node.js 20+
-- Foundry
-- Goldsky CLI (`@goldskycom/cli`)
-- WalletConnect project id
+- [Foundry](https://book.getfoundry.sh/getting-started/installation)
+- [CRE CLI](https://docs.chain.link/cre)
+- Node.js 18+
 
-## Environment
-MVP is **Base Sepolia only**.
-Create `.env` at repo root (for contracts/subgraph) and `.env.local` in frontend.
+## Environment Setup
 
-### Root `.env` (contracts)
-```
-BASE_SEPOLIA_RPC=<rpc>
-PRIVATE_KEY=<deployer>
-BASESCAN_API_KEY=<optional>
+```bash
+cp .env.example .env
+# Fill in: BASE_SEPOLIA_RPC, PRIVATE_KEY
 ```
 
-### Frontend `.env.local`
-```
-NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=<wc_id>
-NEXT_PUBLIC_SUBGRAPH_URL=<goldsky_subgraph_url>
-NEXT_PUBLIC_COORDINATOR_ADDRESS=<addr>
-NEXT_PUBLIC_HOOK_ADDRESS=<addr>
-NEXT_PUBLIC_BASE_SEPOLIA_RPC=<rpc>
-```
+## Deploy Contracts
 
-## Deploy Contracts (Base Sepolia)
-```
+```bash
 cd contracts
-forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url $BASE_SEPOLIA_RPC --broadcast --verify
+forge script script/Deploy.s.sol:DeployLiquidMind \
+  --rpc-url $BASE_SEPOLIA_RPC \
+  --broadcast
 ```
 
-## Deploy Subgraph (Goldsky)
+This deploys `LiquidMindCoordinator` and `AgenticLiquidityHook`, wires them together, and registers the deployer as the first agent.
+
+## Initialize Pool + Test Flow
+
+```bash
+cd contracts
+forge script script/TestnetFlow.s.sol:TestnetFlow \
+  --rpc-url $BASE_SEPOLIA_RPC \
+  --broadcast
 ```
+
+Deploys test routers, initializes a USDC/WETH pool with the hook, adds liquidity, and executes swaps.
+
+## Run E2E Tests
+
+```bash
+export AGENT_PRIVATE_KEY=<your-key>
+bash e2e-live.sh
+```
+
+## Frontend
+
+```bash
+cd frontend
+cp .env.example .env.local
+# Fill in contract addresses and RPC
+npm install
+npm run dev
+```
+
+## Subgraph (Goldsky)
+
+```bash
 cd subgraph
-npm i
+npm install
 npm run codegen
 npm run build
 npm run deploy
 ```
-
-## Frontend
-```
-cd frontend
-npm i
-npm run dev
-```
-
-## Notes
-- MVP is **single-chain** (Base Sepolia)
-- Subgraph endpoint wired into frontend (`NEXT_PUBLIC_SUBGRAPH_URL`)

@@ -18,7 +18,7 @@ if [ -f .env ]; then
 fi
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-RPC_URL="${BASE_SEPOLIA_RPC:-https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY}"
+RPC_URL="${BASE_SEPOLIA_RPC:?Set BASE_SEPOLIA_RPC in .env}"
 COORDINATOR="0x268c2E3D23f5cDDAA0D0B40142053414cC05991b"
 HOOK="0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0"
 POOL_MANAGER="0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408"
