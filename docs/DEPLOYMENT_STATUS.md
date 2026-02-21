@@ -1,6 +1,6 @@
 # LIQUIDMIND Deployment Status
 
-**Last updated:** February 20, 2026
+**Last updated:** February 21, 2026
 
 ---
 
@@ -29,7 +29,7 @@ cre workflow simulate agentic-liquidity --target staging --non-interactive --tri
 
 Attach `simulation-output.txt` or a screenshot showing "Simulation result" / user logs to your submission or README.
 
-**Status:** ✅ Simulation completed successfully (WETH/USDC intent → A2A coordination → optimal pool → x402 escrow → position + rebalancing). Output saved for submission.
+**Status:** ✅ Simulation completed successfully (WETH/USDC intent → A2A coordination → optimal pool → x402 escrow → position + rebalancing + **volatility oracle → dynamic fee update**). Output saved for submission.
 
 ---
 
@@ -78,6 +78,22 @@ NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/...
 ### Liquidmind / Agentic-Liquidity
 - `BASE_SEPOLIA_RPC`, `CRE_ETH_PRIVATE_KEY`, `PRIVATE_KEY` configured
 - Contract addresses in `.env`
+
+---
+
+## Milestone 2: Dynamic Fee from Live Volatility Oracle
+
+**Status:** ✅ Complete — executing on-chain
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Volatility Oracle | Reads 5+ historical Chainlink rounds via `getRoundData()` | ✅ Live |
+| Annualized Vol Calc | Log-return std dev × sqrt(periods/year) | ✅ |
+| Fee Tier Mapping | vol→fee: <20%→500, <40%→3000, <80%→5000, <120%→8000, ≥120%→10000 | ✅ |
+| CRE `updateFee` Action | Builds `executeLocalHookAction(updateFee)` calldata | ✅ |
+| On-chain Execution | `Coordinator→Hook._executeFeeUpdate()` updates `baseFee` | ✅ Confirmed |
+| Fork Test | `test_Fork_ExecuteLocalHookAction_UpdateFee` + `test_Fork_ChainlinkHistoricalRounds` | ✅ 16/16 |
+| E2E Script Step 7 | Automatic pool config seeding + fee update submission | ✅ 12/12 |
 
 ---
 

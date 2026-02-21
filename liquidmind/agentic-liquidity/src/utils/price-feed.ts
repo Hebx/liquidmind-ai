@@ -25,6 +25,7 @@ import { encodeFunctionData, decodeFunctionResult, zeroAddress, parseAbi } from 
 // ABI for Chainlink AggregatorV3Interface
 const AGGREGATOR_ABI = parseAbi([
   "function latestRoundData() view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
+  "function getRoundData(uint80 _roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
   "function decimals() view returns (uint8)",
 ]);
 
@@ -136,6 +137,118 @@ export class PriceFeedUtil {
 
   clearCache(): void {
     this.cache = {};
+  }
+
+  /**
+   * Measure annualized volatility from the last N Chainlink rounds.
+   * Reads getRoundData() for recent rounds, computes log returns, then annualizes.
+   * Returns { volatility: annualized %, latestPrice, roundsRead }.
+   */
+  async getVolatility(
+    symbol: string,
+    runtime: Runtime<unknown>,
+    numRounds: number = 5,
+  ): Promise<{ volatility: number; latestPrice: number; roundsRead: number }> {
+    const feedAddress = CHAINLINK_FEEDS_BASE_SEPOLIA[symbol.toUpperCase()];
+    if (!feedAddress) {
+      return { volatility: 0, latestPrice: 0, roundsRead: 0 };
+    }
+
+    const evmClient = new EVMClient(BASE_SEPOLIA_CHAIN_SELECTOR);
+
+    // Read latest round to get the current roundId
+    const latestCallData = encodeFunctionData({
+      abi: AGGREGATOR_ABI,
+      functionName: "latestRoundData",
+      args: [],
+    });
+
+    const latestReply = evmClient
+      .callContract(runtime, {
+        call: encodeCallMsg({ from: zeroAddress, to: feedAddress as `0x${string}`, data: latestCallData }),
+        blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+      })
+      .result();
+
+    const latestDecoded = decodeFunctionResult({
+      abi: AGGREGATOR_ABI,
+      functionName: "latestRoundData",
+      data: bytesToHex(latestReply.data),
+    }) as readonly [bigint, bigint, bigint, bigint, bigint];
+
+    const [latestRoundId, latestAnswer, , latestUpdatedAt] = latestDecoded;
+    const latestPrice = Number(latestAnswer) / 1e8;
+
+    // Collect prices from recent rounds
+    const prices: { price: number; timestamp: number }[] = [
+      { price: latestPrice, timestamp: Number(latestUpdatedAt) },
+    ];
+
+    for (let i = 1; i <= numRounds; i++) {
+      const roundId = latestRoundId - BigInt(i);
+      if (roundId <= 0n) break;
+
+      try {
+        const callData = encodeFunctionData({
+          abi: AGGREGATOR_ABI,
+          functionName: "getRoundData",
+          args: [roundId],
+        });
+
+        const reply = evmClient
+          .callContract(runtime, {
+            call: encodeCallMsg({ from: zeroAddress, to: feedAddress as `0x${string}`, data: callData }),
+            blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
+          })
+          .result();
+
+        const decoded = decodeFunctionResult({
+          abi: AGGREGATOR_ABI,
+          functionName: "getRoundData",
+          data: bytesToHex(reply.data),
+        }) as readonly [bigint, bigint, bigint, bigint, bigint];
+
+        const [, answer, , updatedAt] = decoded;
+        if (answer > 0n) {
+          prices.push({ price: Number(answer) / 1e8, timestamp: Number(updatedAt) });
+        }
+      } catch {
+        break; // round doesn't exist or reverted
+      }
+    }
+
+    if (prices.length < 2) {
+      return { volatility: 0, latestPrice, roundsRead: prices.length };
+    }
+
+    // Sort oldest → newest
+    prices.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Compute log returns between consecutive rounds
+    const logReturns: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+      logReturns.push(Math.log(prices[i].price / prices[i - 1].price));
+    }
+
+    // Standard deviation of log returns
+    const mean = logReturns.reduce((s, r) => s + r, 0) / logReturns.length;
+    const variance = logReturns.reduce((s, r) => s + (r - mean) ** 2, 0) / logReturns.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Estimate average time between rounds (seconds)
+    const totalTime = prices[prices.length - 1].timestamp - prices[0].timestamp;
+    const avgInterval = totalTime / (prices.length - 1);
+
+    // Annualize: scale by sqrt(seconds_per_year / avg_interval)
+    const SECONDS_PER_YEAR = 365.25 * 24 * 3600;
+    const periodsPerYear = avgInterval > 0 ? SECONDS_PER_YEAR / avgInterval : 365;
+    const annualizedVol = stdDev * Math.sqrt(periodsPerYear) * 100; // as percentage
+
+    return {
+      volatility: Math.round(annualizedVol * 100) / 100, // 2 decimal places
+      latestPrice,
+      roundsRead: prices.length,
+    };
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────

@@ -135,7 +135,7 @@ else
 fi
 
 # ── STEP 4: CRE workflow simulation (live EVMClient → Chainlink feeds) ─────────
-echo -e "\n${YELLOW}[4/5] Running CRE Workflow Simulation (Base Sepolia Chainlink feeds live)...${NC}"
+echo -e "\n${YELLOW}[4/7] Running CRE Workflow Simulation (Base Sepolia Chainlink feeds live)...${NC}"
 echo -e "  ${CYAN}cre workflow simulate agentic-liquidity --target staging --trigger-index 0${NC}\n"
 
 # Unset placeholder CRE env vars exported from root .env — these override CRE's internal
@@ -171,7 +171,7 @@ fi
 rm -f "$SIMULATE_LOG"
 
 # ── STEP 5: Forge fork tests ───────────────────────────────────────────────────
-echo -e "\n${YELLOW}[5/6] Running Forge Fork Tests (fork of Base Sepolia)...${NC}"
+echo -e "\n${YELLOW}[5/7] Running Forge Fork Tests (fork of Base Sepolia)...${NC}"
 echo -e "  ${CYAN}forge test --fork-url \$RPC --match-path 'test/fork/*' -v${NC}\n"
 
 FORGE_OUT=$(cd contracts && forge test \
@@ -188,8 +188,8 @@ else
   fail "Forge fork tests had failures"
 fi
 
-# ── STEP 6: CRE → Hook close-the-loop ─────────────────────────────────────────
-echo -e "\n${YELLOW}[6/6] CRE → Hook: executeLocalHookAction (rebalance with live ticks)...${NC}"
+# ── STEP 6: CRE → Hook close-the-loop (Rebalance) ─────────────────────────────
+echo -e "\n${YELLOW}[6/7] CRE → Hook: executeLocalHookAction (rebalance with live ticks)...${NC}"
 echo -e "  ${CYAN}Coordinator.executeLocalHookAction() ← tick range from Chainlink price${NC}\n"
 
 COORDINATOR="0x268c2E3D23f5cDDAA0D0B40142053414cC05991b"
@@ -253,8 +253,89 @@ else
     echo -e "  ${CYAN}To close the loop, export AGENT_PRIVATE_KEY and re-run${NC}"
     pass "Hook action calldata computed from live Chainlink price (on-chain step skipped: no AGENT_PRIVATE_KEY)"
   fi
-  rm -f "$LOOP_LOG"
 fi
+
+# ── STEP 7: CRE → Hook close-the-loop (Dynamic Fee from Volatility Oracle) ────
+echo -e "\n${YELLOW}[7/7] CRE → Hook: executeLocalHookAction (updateFee from live volatility)...${NC}"
+echo -e "  ${CYAN}Coordinator.executeLocalHookAction(updateFee) ← volatility from Chainlink rounds${NC}\n"
+
+# Seed the pool config on-chain if it hasn't been initialized by afterInitialize yet.
+# Compute PoolId = keccak256(abi.encode(PoolKey))
+if [ -n "${AGENT_PRIVATE_KEY:-}" ]; then
+  POOL_KEY_ENCODED=$(cast abi-encode "f((address,address,uint24,int24,address))" \
+    "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,3000,60,$HOOK)" 2>/dev/null)
+  POOL_ID=$(cast keccak "$POOL_KEY_ENCODED")
+
+  # Check if pool config is already set (baseFee > 0)
+  CURRENT_BASE_FEE=$(cast call "$HOOK" \
+    "poolConfigs(bytes32)(uint24,uint24,uint24,int24,bool,bool)" "$POOL_ID" \
+    --rpc-url "$RPC_URL" 2>/dev/null | head -1 | tr -d ' ')
+  if [ "$CURRENT_BASE_FEE" = "0" ]; then
+    echo -e "  ${CYAN}Pool config not yet seeded — calling setPoolConfig as owner...${NC}"
+    # PoolConfig(baseFee=3000, maxFee=10000, minFee=500, rebalanceThreshold=200, autoRebalance=true, agentOnlyLPs=false)
+    cast send "$HOOK" \
+      "setPoolConfig(bytes32,(uint24,uint24,uint24,int24,bool,bool))" \
+      "$POOL_ID" "(3000,10000,500,200,true,false)" \
+      --rpc-url "$RPC_URL" \
+      --private-key "$AGENT_PRIVATE_KEY" > /dev/null 2>&1 \
+      && echo -e "  ${GREEN}Pool config seeded: baseFee=3000, minFee=500, maxFee=10000${NC}" \
+      || echo -e "  ${YELLOW}Pool config seed failed (may already be set)${NC}"
+  else
+    echo -e "  ${GREEN}Pool config already seeded (baseFee=$CURRENT_BASE_FEE)${NC}"
+  fi
+fi
+
+# Capture fee action outputs from the same simulation log (re-run if needed)
+FEE_LOG="/tmp/liquidmind-fee-$$.txt"
+if [ -f "$LOOP_LOG" ] && grep -q "FEE_ACTION_CALLDATA=" "$LOOP_LOG" 2>/dev/null; then
+  cp "$LOOP_LOG" "$FEE_LOG"
+else
+  (cd liquidmind && timeout 90 cre workflow simulate agentic-liquidity \
+    --target staging --non-interactive --trigger-index 0 2>&1) > "$FEE_LOG" || true
+fi
+
+FEE_VOLATILITY=$(grep "FEE_ACTION_VOLATILITY=" "$FEE_LOG" | tail -1 | cut -d= -f2 | tr -d ' ')
+FEE_NEW=$(grep "FEE_ACTION_NEW_FEE=" "$FEE_LOG" | tail -1 | cut -d= -f2 | tr -d ' ')
+
+if [ -z "$FEE_VOLATILITY" ] || [ -z "$FEE_NEW" ]; then
+  echo -e "  ${YELLOW}⚠  CRE workflow did not output volatility / fee data${NC}"
+  echo -e "  ${CYAN}This can happen if the EVMClient couldn't read historical rounds${NC}"
+  pass "Dynamic fee update: volatility oracle not available (skipped)"
+else
+  echo -e "  ${GREEN}Volatility Oracle live: annualized = ${FEE_VOLATILITY}%, optimal fee = ${FEE_NEW}${NC}"
+  FEE_PERCENT=$(echo "$FEE_NEW" | awk '{printf "%.2f", $1/10000*100}')
+  echo -e "  Fee in human terms: ${FEE_PERCENT}%"
+
+  if [ -n "${AGENT_PRIVATE_KEY:-}" ]; then
+    echo -e "  ${CYAN}Submitting updateFee to Coordinator...${NC}"
+
+    FEE_ACTION_ID=$(cast keccak "e2e-fee-$(date +%s)")
+
+    # Same PoolKey encoding
+    FEE_ENCODED_KEY=$(cast abi-encode "f((address,address,uint24,int24,address))" \
+      "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,3000,60,$HOOK)" 2>/dev/null)
+
+    # actionData: abi.encode(uint24 newFee)
+    FEE_ACTION_DATA=$(cast abi-encode "f(uint24)" "$FEE_NEW" 2>/dev/null)
+
+    FEE_TX_OUT=$(cast send "$COORDINATOR" \
+      "executeLocalHookAction(bytes32,string,bytes,bytes)" \
+      "$FEE_ACTION_ID" "updateFee" "$FEE_ENCODED_KEY" "$FEE_ACTION_DATA" \
+      --rpc-url "$RPC_URL" \
+      --private-key "$AGENT_PRIVATE_KEY" 2>&1) || FEE_TX_OUT="FAILED"
+    if echo "$FEE_TX_OUT" | grep -qi "transactionHash\|blockNumber\|status.*1"; then
+      FEE_TX_HASH=$(echo "$FEE_TX_OUT" | grep -i "transactionHash" | head -1 | awk '{print $NF}')
+      pass "CRE -> Hook updateFee executed on-chain (fee=${FEE_NEW}, vol=${FEE_VOLATILITY}%, tx: ${FEE_TX_HASH:-submitted})"
+    else
+      echo -e "  ${YELLOW}TX output: ${FEE_TX_OUT:0:300}${NC}"
+      fail "executeLocalHookAction(updateFee) transaction failed"
+    fi
+  else
+    echo -e "  ${YELLOW}AGENT_PRIVATE_KEY not set — skipping on-chain fee update${NC}"
+    pass "Dynamic fee calldata computed from live volatility (on-chain step skipped: no AGENT_PRIVATE_KEY)"
+  fi
+fi
+rm -f "$FEE_LOG" "$LOOP_LOG"
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 divider

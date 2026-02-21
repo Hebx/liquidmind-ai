@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Test, console2} from "forge-std/Test.sol";
 import {AgenticLiquidityHook} from "../../src/AgenticLiquidityHook.sol";
 import {LiquidMindCoordinator} from "../../src/LiquidMindCoordinator.sol";
+import {PoolId} from "v4-core/src/types/PoolId.sol";
 
 /**
  * @title BaseSepolia Fork Tests
@@ -185,6 +186,68 @@ contract BaseSepoliaForkTest is Test {
         vm.stopPrank();
     }
 
+    // ── executeLocalHookAction: updateFee (Milestone 2 — Volatility Oracle) ──
+
+    function test_Fork_ExecuteLocalHookAction_UpdateFee() public {
+        // Pool config must be seeded first (normally done by afterInitialize).
+        // On a fork without an initialized pool we set it manually as the owner.
+        bytes memory encodedKey = abi.encode(
+            address(0x036CbD53842c5426634e7929541eC2318f3dCF7e), // USDC
+            address(0x4200000000000000000000000000000000000006), // WETH
+            uint24(3000),
+            int24(60),
+            HOOK
+        );
+
+        // Compute the same PoolId the hook will resolve
+        bytes32 poolId = keccak256(encodedKey);
+
+        vm.startPrank(DEPLOYER);
+
+        // Seed default config so fee bounds are set
+        hook.setPoolConfig(
+            PoolId.wrap(poolId),
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 500,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes32 actionId = keccak256(abi.encodePacked("fork-test-updatefee", block.timestamp));
+
+        bytes memory actionData = abi.encode(uint24(5000));
+
+        bool success = coordinator.executeLocalHookAction(
+            actionId,
+            "updateFee",
+            encodedKey,
+            actionData
+        );
+        assertTrue(success, "executeLocalHookAction updateFee failed");
+
+        vm.stopPrank();
+    }
+
+    // ── Volatility Oracle: read historical rounds from Chainlink ──────────────
+
+    function test_Fork_ChainlinkHistoricalRounds() public view {
+        // Verify we can read getRoundData for recent rounds (needed by CRE volatility oracle)
+        (uint80 latestRoundId,,,,) = ethFeed.latestRoundData();
+
+        uint80 prevRound = latestRoundId - 1;
+        (, int256 prevAnswer,,uint256 prevUpdatedAt,) = ethFeed.getRoundData(prevRound);
+        assertTrue(prevAnswer > 0, "Previous round answer must be positive");
+        assertGt(prevUpdatedAt, 0, "Previous round updatedAt must be nonzero");
+
+        console2.log("Latest roundId:", latestRoundId);
+        console2.log("Previous round answer:", uint256(prevAnswer));
+        console2.log("Round delta:", latestRoundId - prevRound);
+    }
+
     // ── Cross-check: on-chain ETH price matches expected range ────────────────
 
     function test_Fork_ETH_Price_Exceeds_MinYield_Threshold() public view {
@@ -200,6 +263,16 @@ contract BaseSepoliaForkTest is Test {
 
 interface IAggregatorV3 {
     function latestRoundData()
+        external
+        view
+        returns (
+            uint80 roundId,
+            int256 answer,
+            uint256 startedAt,
+            uint256 updatedAt,
+            uint80 answeredInRound
+        );
+    function getRoundData(uint80 _roundId)
         external
         view
         returns (

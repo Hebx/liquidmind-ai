@@ -140,16 +140,91 @@ function buildRebalanceCalldata(
   return { coordinatorCalldata, tickLower, tickUpper, actionId };
 }
 
+/**
+ * Build calldata for Coordinator.executeLocalHookAction() that sets the
+ * dynamic LP fee on the AgenticLiquidityHook based on live volatility.
+ */
+function buildUpdateFeeCalldata(
+  newFee: number,
+  actionId: Hex
+): {
+  coordinatorCalldata: Hex;
+  newFee: number;
+  actionId: Hex;
+} {
+  const TICK_SPACING = 60;
+  const POOL_FEE = 3000;
+
+  const encodedPoolKey = encodeAbiParameters(
+    [{
+      type: "tuple",
+      components: [
+        { name: "currency0", type: "address" },
+        { name: "currency1", type: "address" },
+        { name: "fee",        type: "uint24"  },
+        { name: "tickSpacing",type: "int24"   },
+        { name: "hooks",      type: "address" },
+      ],
+    }],
+    [{
+      currency0:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.USDC : CONTRACTS.WETH,
+      currency1:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.WETH : CONTRACTS.USDC,
+      fee:         POOL_FEE,
+      tickSpacing: TICK_SPACING,
+      hooks:       CONTRACTS.HOOK,
+    }]
+  );
+
+  const actionData = encodeAbiParameters(
+    [{ name: "newFee", type: "uint24" }],
+    [newFee]
+  );
+
+  const coordinatorCalldata = encodeFunctionData({
+    abi: parseAbi([
+      "function executeLocalHookAction(bytes32 actionId, string actionType, bytes encodedKey, bytes actionData) returns (bool)"
+    ]),
+    functionName: "executeLocalHookAction",
+    args: [actionId, "updateFee", encodedPoolKey, actionData],
+  });
+
+  return { coordinatorCalldata, newFee, actionId };
+}
+
+/**
+ * Map annualized volatility (%) to an optimal Uniswap v4 LP fee (in hundredths of a bip).
+ *
+ * Tiers:
+ *   vol < 20%  → 500  (0.05%)  — stable-ish pair
+ *   vol < 40%  → 3000 (0.30%)  — normal
+ *   vol < 80%  → 5000 (0.50%)  — elevated
+ *   vol < 120% → 8000 (0.80%)  — high
+ *   vol ≥ 120% → 10000 (1.00%) — extreme
+ */
+function volatilityToFee(annualizedVol: number): number {
+  if (annualizedVol < 20) return 500;
+  if (annualizedVol < 40) return 3000;
+  if (annualizedVol < 80) return 5000;
+  if (annualizedVol < 120) return 8000;
+  return 10000;
+}
+
 interface WorkflowState {
   intent: LiquidityIntent;
   consensus?: AgentConsensus;
   approved?: boolean;
   executionHash?: string;
   positionId?: string;
-  // On-chain action: CRE-computed tick bounds + ready-to-submit calldata
   hookAction?: {
     tickLower: number;
     tickUpper: number;
+    actionId: Hex;
+    coordinatorCalldata: Hex;
+    coordinator: Hex;
+  };
+  feeAction?: {
+    newFee: number;
+    volatility: number;
     actionId: Hex;
     coordinatorCalldata: Hex;
     coordinator: Hex;
@@ -202,10 +277,39 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
   console.log(`  HOOK_TICK_LOWER: ${tickLower}`);
   console.log(`  HOOK_TICK_UPPER: ${tickUpper}`);
 
+  // ─── Milestone 2: Live Volatility → Dynamic Fee ──────────────────────────
+  let feeAction: WorkflowState["feeAction"];
+  if (runtime) {
+    try {
+      const ethSymbol = intent.tokenA.toUpperCase().includes("ETH") ? intent.tokenA : intent.tokenB;
+      const volResult = await priceFeed.getVolatility(ethSymbol, runtime, 5);
+
+      const optimalFee = volatilityToFee(volResult.volatility);
+      const feeActionId = `0x${(Date.now() + 1).toString(16).padStart(64, "0")}` as `0x${string}`;
+      const feeCalldata = buildUpdateFeeCalldata(optimalFee, feeActionId);
+
+      console.log(`  ─── Volatility Oracle ───────────────────────────`);
+      console.log(`  VOLATILITY_ANNUALIZED: ${volResult.volatility}%`);
+      console.log(`  VOLATILITY_ROUNDS_READ: ${volResult.roundsRead}`);
+      console.log(`  OPTIMAL_FEE: ${optimalFee} (${(optimalFee / 10000 * 100).toFixed(2)}%)`);
+      console.log(`  FEE_ACTION_CALLDATA: ${feeCalldata.coordinatorCalldata}`);
+
+      feeAction = {
+        ...feeCalldata,
+        volatility: volResult.volatility,
+        coordinator: CONTRACTS.COORDINATOR,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`  ⚠️  Volatility measurement failed: ${msg} — skipping fee update`);
+    }
+  }
+
   return {
     ...state,
     intent,
     hookAction: { ...hookAction, coordinator: CONTRACTS.COORDINATOR },
+    feeAction,
   };
 }
 
@@ -348,25 +452,34 @@ async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
 
   console.log(`  📅 Rebalancing scheduled every hour (5% threshold)`);
 
-  // ─── Emit the CRE → Hook action payload ────────────────────────────────
+  // ─── Emit the CRE → Hook rebalance action payload ───────────────────────
   if (state.hookAction) {
     const { tickLower, tickUpper, coordinatorCalldata, coordinator } = state.hookAction;
     console.log("");
-    console.log("─── Hook Action Ready for On-Chain Submission ───────────────────────");
+    console.log("─── Rebalance Action Ready for On-Chain Submission ──────────────────");
     console.log(`  Coordinator     : ${coordinator}`);
     console.log(`  Tick Lower      : ${tickLower}`);
     console.log(`  Tick Upper      : ${tickUpper}`);
-    console.log(`  Cast command:`);
-    console.log(`  cast send ${coordinator} \\`);
-    console.log(`    --data ${coordinatorCalldata} \\`);
-    console.log(`    --rpc-url $BASE_SEPOLIA_RPC \\`);
-    console.log(`    --private-key $AGENT_PRIVATE_KEY`);
     console.log("──────────────────────────────────────────────────────────────────────");
-    // Structured output for e2e script parsing
     console.log(`HOOK_ACTION_COORDINATOR=${coordinator}`);
     console.log(`HOOK_ACTION_CALLDATA=${coordinatorCalldata}`);
     console.log(`HOOK_ACTION_TICK_LOWER=${tickLower}`);
     console.log(`HOOK_ACTION_TICK_UPPER=${tickUpper}`);
+  }
+
+  // ─── Emit the CRE → Hook dynamic fee update action payload ─────────────
+  if (state.feeAction) {
+    const { newFee, volatility, coordinatorCalldata, coordinator } = state.feeAction;
+    console.log("");
+    console.log("─── Dynamic Fee Update Ready for On-Chain Submission ────────────────");
+    console.log(`  Coordinator     : ${coordinator}`);
+    console.log(`  Volatility      : ${volatility}% annualized`);
+    console.log(`  Optimal Fee     : ${newFee} (${(newFee / 10000 * 100).toFixed(2)}%)`);
+    console.log("──────────────────────────────────────────────────────────────────────");
+    console.log(`FEE_ACTION_COORDINATOR=${coordinator}`);
+    console.log(`FEE_ACTION_CALLDATA=${coordinatorCalldata}`);
+    console.log(`FEE_ACTION_NEW_FEE=${newFee}`);
+    console.log(`FEE_ACTION_VOLATILITY=${volatility}`);
   }
 
   return {
