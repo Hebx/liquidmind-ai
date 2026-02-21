@@ -124,7 +124,8 @@
   }
   
   .btn-brutal-primary {
-    @apply btn-brutal;
+    @apply relative px-6 py-3 font-bold uppercase tracking-wider transition-all duration-150;
+    border: var(--border-thick) solid var(--accent-lime);
     background: var(--accent-lime);
     color: var(--bg-primary);
     border-color: var(--accent-lime);
@@ -147,14 +148,16 @@
   }
   
   .card-brutal-lime {
-    @apply card-brutal;
-    border-color: var(--accent-lime);
+    @apply relative p-6;
+    border: var(--border-thick) solid var(--accent-lime);
+    background: var(--bg-secondary);
     box-shadow: 6px 6px 0px var(--accent-lime);
   }
   
   .card-brutal-cyan {
-    @apply card-brutal;
-    border-color: var(--accent-cyan);
+    @apply relative p-6;
+    border: var(--border-thick) solid var(--accent-cyan);
+    background: var(--bg-secondary);
     box-shadow: 6px 6px 0px var(--accent-cyan);
   }
   

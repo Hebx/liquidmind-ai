@@ -22,14 +22,18 @@ contract DeployLiquidMind is Script {
         // Deploy Coordinator
         LiquidMindCoordinator coordinator = new LiquidMindCoordinator(ccipRouter, linkToken);
 
-        // Deploy Hook with mined salt for correct v4 permissions (0x10C0)
-        bytes32 salt = 0x0000000000000000000000000000000000000000000000000000000000002aa2;
+        // Deploy Hook with mined salt for v4 permissions (0x18C0):
+        // AFTER_INITIALIZE | BEFORE_ADD_LIQUIDITY | BEFORE_SWAP | AFTER_SWAP
+        bytes32 salt = 0x0000000000000000000000000000000000000000000000000000000000000ab8;
         address deployerAddress = vm.addr(deployerKey);
         AgenticLiquidityHook hook = new AgenticLiquidityHook{salt: salt}(IPoolManager(poolManager), deployerAddress);
 
-        // Setup
+        // Wire hook ↔ coordinator
         hook.setAgentCoordinator(address(coordinator));
         coordinator.setLocalHook(address(hook));
+
+        // Register deployer as the first authorized agent (CRE wallet)
+        coordinator.registerAgent(deployerAddress);
 
         vm.stopBroadcast();
 

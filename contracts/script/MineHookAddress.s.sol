@@ -16,9 +16,10 @@ contract MineHookAddress is Script {
             abi.encode(poolManager, initialOwner)
         );
         
-        uint256 flags = 0x10C0; 
+        // AFTER_INITIALIZE | BEFORE_ADD_LIQUIDITY | BEFORE_SWAP | AFTER_SWAP
+        uint256 flags = 0x18C0; 
         
-        console.log("Mining salt for flags: 0x10C0...");
+        console.log("Mining salt for flags: 0x18C0...");
         
         for (uint256 i = 0; i < 2000000; i++) {
             bytes32 salt = bytes32(i);

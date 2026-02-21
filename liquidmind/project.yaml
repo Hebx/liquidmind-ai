@@ -24,25 +24,33 @@
 #       forwarder: "0x..."                          # Forwarder contract address on the chain
 
 # ==========================================================================
-# staging/staging-settings: Base Sepolia (matches workflow.yaml targets)
+# staging/staging-settings: Base Sepolia + Ethereum Mainnet (deploy needs mainnet for Registry)
 # ==========================================================================
 staging:
   rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://eth-mainnet.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
 
 staging-settings:
   rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://eth-mainnet.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
 
 # ==========================================================================
 production:
   rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://eth-mainnet.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
 
 production-settings:
   rpcs:
+    - chain-name: ethereum-mainnet
+      url: https://eth-mainnet.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY
     - chain-name: ethereum-testnet-sepolia-base-1
       url: https://base-sepolia.g.alchemy.com/v2/REDACTED_ALCHEMY_KEY

@@ -9,7 +9,7 @@
   "instances": [
     {
       "abi": "Simple",
-      "address": "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA",
+      "address": "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
       "startBlock": 1,
       "chain": "base-sepolia"
     }

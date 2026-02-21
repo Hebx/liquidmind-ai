@@ -6,7 +6,7 @@ dataSources:
     name: AgenticLiquidityHook
     network: base-sepolia
     source:
-      address: "0x15b60e98a00d83BA4B010CceDb09864d1d93d0c0"
+      address: "0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0"
       abi: AgenticLiquidityHook
       startBlock: 1
     mapping:
@@ -35,7 +35,7 @@ dataSources:
     name: LiquidMindCoordinator
     network: base-sepolia
     source:
-      address: "0x0fd80F163d9D1a62f77bd88db2eb9fd91471DddA"
+      address: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b"
       abi: LiquidMindCoordinator
       startBlock: 1
     mapping:

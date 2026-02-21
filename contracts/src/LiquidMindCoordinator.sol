@@ -110,6 +110,33 @@ contract LiquidMindCoordinator is CCIPReceiver, OwnerIsCreator {
         s_linkToken = LinkTokenInterface(_link);
     }
 
+    // ============ Local Hook Execution (same-chain) ============
+
+    /**
+     * @notice Direct execution path: CRE agent wallet → Coordinator → Hook
+     * @dev Bridges the gap between off-chain CRE workflow and on-chain hook execution
+     *      without requiring cross-chain CCIP messaging (same-chain only).
+     *      Called by the CRE workflow's agent wallet after computing tick bounds from
+     *      live Chainlink price feeds.
+     * @param actionId   Unique identifier to prevent replay (agent generates)
+     * @param actionType "rebalance" | "updateFee" | "setAgentOnly" | "updateConfig"
+     * @param encodedKey ABI-encoded PoolKey
+     * @param actionData Action-specific ABI-encoded payload
+     */
+    function executeLocalHookAction(
+        bytes32 actionId,
+        string calldata actionType,
+        bytes calldata encodedKey,
+        bytes calldata actionData
+    ) external onlyAgent returns (bool success) {
+        require(localHook != address(0), InvalidReceiverAddress());
+        success = IAgenticLiquidityHook(localHook).executeAgentAction(
+            actionId, actionType, encodedKey, actionData
+        );
+        agents[msg.sender].lastActivity = block.timestamp;
+        emit LiquidityCommandSent(block.chainid, actionId, actionType);
+    }
+
     // ============ Cross-Chain Messaging ============
     function sendLiquidityCommand(
         uint256 destinationChainSelector,

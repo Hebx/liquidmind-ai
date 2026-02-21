@@ -15,7 +15,7 @@ export type SubgraphPosition = {
   blockNumber: string;
 };
 
-async function fetchMetaBlock(): Promise<number | null> {
+export async function fetchMetaBlock(): Promise<number | null> {
   if (!SUBGRAPH_URL) return null;
   const query = `query Meta { _meta { block { number } } }`;
   const res = await fetch(SUBGRAPH_URL, {
@@ -121,19 +121,4 @@ export async function fetchPositions(sinceBlock?: number): Promise<SubgraphPosit
   return Array.from(positionMap.values()).sort(
     (a, b) => Number(b.blockNumber) - Number(a.blockNumber)
   );
-}
-
-export async function fetchMetaBlock(): Promise<number | null> {
-  if (!SUBGRAPH_URL) return null;
-  const query = `query Meta { _meta { block { number } } }`;
-  const res = await fetch(SUBGRAPH_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  if (json.errors) return null;
-  const number = json.data?._meta?.block?.number;
-  return typeof number === 'number' ? number : null;
 }

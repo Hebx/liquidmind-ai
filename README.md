@@ -86,6 +86,13 @@ liquidmind-ai/
 - `docs/SECURITY.md`
 - `docs/CRE.md`
 
+### Chainlink Integration Files
+- `liquidmind/agentic-liquidity/main.ts` (primary CRE workflow)
+- `liquidmind/agentic-liquidity/src/utils/price-feed.ts` (price feed workflow utility)
+- `contracts/src/LiquidMindCoordinator.sol` (orchestration contract + CCIP hooks)
+- `contracts/src/AgenticLiquidityHook.sol` (Uniswap v4 hook contract)
+- `docs/CRE.md` (CRE architecture and operator flow)
+
 ### Prerequisites
 - Node.js 18+
 - Foundry
@@ -121,13 +128,12 @@ forge test
 forge script script/Deploy.s.sol --rpc-url $RPC_URL
 ```
 
-### CRE Workflows
+### CRE Workflows ([simulation](https://docs.chain.link/cre) — no deploy approval needed)
 ```bash
-cd cre-workflow
-npm install
-npm run build
-npm run simulate
+cd liquidmind
+cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
 ```
+See [CRE docs](https://docs.chain.link/cre) and [Deployment Status](./docs/DEPLOYMENT_STATUS.md) for deploy steps when early access is granted.
 
 ### A2A Agents
 ```bash
@@ -140,7 +146,7 @@ npm run dev
 
 ## 🎥 Demo
 
-[Watch the Demo Video](https://youtube.com/...) *(Coming Soon)*
+Demo video will be published before submission. Use [docs/VIDEO_SCRIPT.md](./docs/VIDEO_SCRIPT.md) to record (3–5 min): simulation run, contracts/frontend, and wrap.
 
 **Demo Flow:**
 1. User expresses intent via natural language
@@ -159,9 +165,9 @@ npm run dev
 | CRE Workflow orchestration | ✅ 6-step workflow |
 | Blockchain + external API integration | ✅ Price Feeds, x402, A2A |
 | AI agent integration | ✅ 3-agent coordination |
-| Successful simulation/deployment | ✅ Testnet ready |
-| 3-5 min video | 🎬 In production |
-| Public GitHub repo | ✅ You're looking at it |
+| Successful simulation/deployment | ✅ Via [CRE CLI simulation](https://docs.chain.link/cre) (deploy optional, early access) |
+| 3-5 min video | ⚠️ In production (link pending) |
+| Public GitHub repo | ⚠️ Must be public at submission time |
 
 ---
 
@@ -170,14 +176,16 @@ npm run dev
 - [Project Specification](./SPEC.md)
 - [Brand Identity](./BRAND.md)
 - [Smart Contract Architecture](./docs/CONTRACTS.md)
-- [CRE Workflow Design](./docs/CRE_WORKFLOW.md)
-- [A2A Agent Coordination](./docs/AGENTS.md)
+- [CRE Workflow Guide](./docs/CRE.md)
+- [Deployment Status](./docs/DEPLOYMENT_STATUS.md)
+- [Runbook](./docs/RUNBOOK.md)
 
 ---
 
 ## 🔗 Resources
 
 - [Chainlink CRE Documentation](https://docs.chain.link/cre)
+- [CRE & x402 Workshop (Base & Chainlink)](https://youtu.be/r7VKS5L47f0) — trigger–callback model, simulation, and x402 pay-per-request
 - [x402 Protocol](https://x402.org)
 - [Uniswap v4 Docs](https://docs.uniswap.org/contracts/v4)
 - [A2A Protocol](https://a2a.org)

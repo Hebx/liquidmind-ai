@@ -13,6 +13,7 @@
 import { cre, type Runtime } from "@chainlink/cre-sdk";
 import { Runner } from "@chainlink/cre-sdk";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
+import { encodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "viem";
 
 // Workflow configuration
 interface LiquidityIntent {
@@ -42,12 +43,117 @@ interface AgentConsensus {
   };
 }
 
+// ============ On-Chain Action Prep ============
+
+/** Base Sepolia deployed addresses */
+const CONTRACTS = {
+  HOOK:        "0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0" as Hex,
+  COORDINATOR: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b" as Hex,
+  POOL_MANAGER: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408" as Hex,
+  // Base Sepolia canonical token addresses
+  WETH: "0x4200000000000000000000000000000000000006" as Hex,
+  USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Hex,
+} as const;
+
+/** Convert a USD price to the approximate Uniswap v4 tick.
+ *  tick = ln(price) / ln(1.0001)
+ *  For USDC/WETH pool: price = USDC per WETH (i.e. ETH/USD)
+ *  Since currency0 < currency1 by address order, if USDC < WETH in address space
+ *  the pool price = WETH/USDC = 1/ETH_USD_price → tick is negative. */
+function priceToTick(usdPrice: number, isToken0Usdc: boolean): number {
+  const logBase = Math.log(1.0001);
+  if (isToken0Usdc) {
+    // token0=USDC, token1=WETH → sqrtPrice = sqrt(ETH/USDC price) = sqrt(1/usdPrice)
+    return Math.round(Math.log(1 / usdPrice) / logBase);
+  } else {
+    // token0=WETH, token1=USDC → sqrtPrice = sqrt(USDC/ETH price) = sqrt(usdPrice)
+    return Math.round(Math.log(usdPrice) / logBase);
+  }
+}
+
+/** Snap a tick to the nearest valid multiple of tickSpacing (rounding toward negative infinity) */
+function snapTick(tick: number, spacing: number): number {
+  const rem = ((tick % spacing) + spacing) % spacing; // positive remainder
+  return tick - rem;
+}
+
+/** Choose a half-range in tick units based on risk tolerance */
+function getHalfRange(riskTolerance: LiquidityIntent["riskTolerance"]): number {
+  if (riskTolerance === "low")    return 600;   // ~±6% price range
+  if (riskTolerance === "medium") return 1200;  // ~±12%
+  return 2400;                                  // ~±24% for high risk
+}
+
+/**
+ * Build the calldata for Coordinator.executeLocalHookAction() that will
+ * apply the CRE-computed rebalance tick bounds to the AgenticLiquidityHook.
+ */
+function buildRebalanceCalldata(
+  tickLower: number,
+  tickUpper: number,
+  actionId: Hex
+): {
+  coordinatorCalldata: Hex;
+  tickLower: number;
+  tickUpper: number;
+  actionId: Hex;
+} {
+  const TICK_SPACING = 60;
+  const POOL_FEE = 3000;
+
+  // Encode PoolKey struct: (currency0, currency1, fee, tickSpacing, hooks)
+  const encodedPoolKey = encodeAbiParameters(
+    [{
+      type: "tuple",
+      components: [
+        { name: "currency0", type: "address" },
+        { name: "currency1", type: "address" },
+        { name: "fee",        type: "uint24"  },
+        { name: "tickSpacing",type: "int24"   },
+        { name: "hooks",      type: "address" },
+      ],
+    }],
+    [{
+      currency0:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.USDC : CONTRACTS.WETH,
+      currency1:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.WETH : CONTRACTS.USDC,
+      fee:         POOL_FEE,
+      tickSpacing: TICK_SPACING,
+      hooks:       CONTRACTS.HOOK,
+    }]
+  );
+
+  // Encode rebalance actionData: abi.encode(int24 tickLower, int24 tickUpper)
+  const actionData = encodeAbiParameters(
+    [{ name: "tickLower", type: "int24" }, { name: "tickUpper", type: "int24" }],
+    [tickLower, tickUpper]
+  );
+
+  // Full calldata for Coordinator.executeLocalHookAction(bytes32, string, bytes, bytes)
+  const coordinatorCalldata = encodeFunctionData({
+    abi: parseAbi([
+      "function executeLocalHookAction(bytes32 actionId, string actionType, bytes encodedKey, bytes actionData) returns (bool)"
+    ]),
+    functionName: "executeLocalHookAction",
+    args: [actionId, "rebalance", encodedPoolKey, actionData],
+  });
+
+  return { coordinatorCalldata, tickLower, tickUpper, actionId };
+}
+
 interface WorkflowState {
   intent: LiquidityIntent;
   consensus?: AgentConsensus;
   approved?: boolean;
   executionHash?: string;
   positionId?: string;
+  // On-chain action: CRE-computed tick bounds + ready-to-submit calldata
+  hookAction?: {
+    tickLower: number;
+    tickUpper: number;
+    actionId: Hex;
+    coordinatorCalldata: Hex;
+    coordinator: Hex;
+  };
 }
 
 // Price feed utility instance
@@ -59,14 +165,8 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
 
   const intent = state.intent;
 
-  // Validate intent parameters
-  if (!intent.tokenA || !intent.tokenB) {
-    throw new Error("Invalid intent: missing token pair");
-  }
-
-  if (intent.amount <= 0n) {
-    throw new Error("Invalid intent: amount must be positive");
-  }
+  if (!intent.tokenA || !intent.tokenB) throw new Error("Invalid intent: missing token pair");
+  if (intent.amount <= 0n) throw new Error("Invalid intent: amount must be positive");
 
   // Fetch live prices from Chainlink feeds on Base Sepolia via CRE EVMClient
   const [priceA, priceB] = await Promise.all([
@@ -74,14 +174,38 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
     priceFeed.getPrice(intent.tokenB, runtime),
   ]);
 
-  console.log(`  Token A Price: $${priceA}`);
-  console.log(`  Token B Price: $${priceB}`);
+  console.log(`  Token A (${intent.tokenA}) Price: $${priceA}`);
+  console.log(`  Token B (${intent.tokenB}) Price: $${priceB}`);
   console.log(`  Action: ${intent.action}`);
   console.log(`  Risk Tolerance: ${intent.riskTolerance}`);
 
+  // ─── Compute optimal tick range for the hook rebalance ───────────────────
+  // Determine token ordering in pool (lower address = currency0)
+  const isUsdcToken0 = CONTRACTS.USDC.toLowerCase() < CONTRACTS.WETH.toLowerCase();
+  const ethUsdPrice  = intent.tokenA.toUpperCase().includes("ETH") ? priceA : priceB;
+  const currentTick  = priceToTick(ethUsdPrice, isUsdcToken0);
+  const halfRange    = getHalfRange(intent.riskTolerance);
+  const TICK_SPACING = 60;
+  const tickLower    = snapTick(currentTick - halfRange, TICK_SPACING);
+  const tickUpper    = snapTick(currentTick + halfRange, TICK_SPACING);
+
+  console.log(`  ETH/USD price  : $${ethUsdPrice.toFixed(2)}`);
+  console.log(`  Approx tick    : ${currentTick}`);
+  console.log(`  Optimal range  : [${tickLower}, ${tickUpper}]  (±${halfRange} ticks)`);
+
+  // Build the calldata to send from e2e test to Coordinator.executeLocalHookAction()
+  const actionId = `0x${Date.now().toString(16).padStart(64, "0")}` as `0x${string}`;
+  const hookAction = buildRebalanceCalldata(tickLower, tickUpper, actionId);
+
+  console.log(`  ACTION_CALLDATA_COORDINATOR: ${CONTRACTS.COORDINATOR}`);
+  console.log(`  ACTION_CALLDATA: ${hookAction.coordinatorCalldata}`);
+  console.log(`  HOOK_TICK_LOWER: ${tickLower}`);
+  console.log(`  HOOK_TICK_UPPER: ${tickUpper}`);
+
   return {
     ...state,
-    intent
+    intent,
+    hookAction: { ...hookAction, coordinator: CONTRACTS.COORDINATOR },
   };
 }
 
@@ -206,28 +330,44 @@ async function executeWithPayment(state: WorkflowState): Promise<WorkflowState> 
   };
 }
 
-// Step 6: Monitor & Rebalance
+// Step 6: Monitor & Rebalance + On-Chain Action Dispatch
 async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
   console.log("📊 Monitoring position...");
 
   const { executionHash } = state;
 
-  // Wait for transaction confirmation
   const receipt = await waitForConfirmation(executionHash!);
-
-  // Extract position ID from receipt
   const positionId = receipt.logs[0].topics[1];
 
   console.log(`  ✅ Position created: ${positionId}`);
-  console.log(`  🔗 Setting up monitoring...`);
 
-  // Schedule rebalancing check
   await scheduleRebalanceCheck(positionId, {
-    interval: 3600, // 1 hour
-    threshold: 5 // 5% drift triggers rebalance
+    interval: 3600,
+    threshold: 5
   });
 
   console.log(`  📅 Rebalancing scheduled every hour (5% threshold)`);
+
+  // ─── Emit the CRE → Hook action payload ────────────────────────────────
+  if (state.hookAction) {
+    const { tickLower, tickUpper, coordinatorCalldata, coordinator } = state.hookAction;
+    console.log("");
+    console.log("─── Hook Action Ready for On-Chain Submission ───────────────────────");
+    console.log(`  Coordinator     : ${coordinator}`);
+    console.log(`  Tick Lower      : ${tickLower}`);
+    console.log(`  Tick Upper      : ${tickUpper}`);
+    console.log(`  Cast command:`);
+    console.log(`  cast send ${coordinator} \\`);
+    console.log(`    --data ${coordinatorCalldata} \\`);
+    console.log(`    --rpc-url $BASE_SEPOLIA_RPC \\`);
+    console.log(`    --private-key $AGENT_PRIVATE_KEY`);
+    console.log("──────────────────────────────────────────────────────────────────────");
+    // Structured output for e2e script parsing
+    console.log(`HOOK_ACTION_COORDINATOR=${coordinator}`);
+    console.log(`HOOK_ACTION_CALLDATA=${coordinatorCalldata}`);
+    console.log(`HOOK_ACTION_TICK_LOWER=${tickLower}`);
+    console.log(`HOOK_ACTION_TICK_UPPER=${tickUpper}`);
+  }
 
   return {
     ...state,
