@@ -54,7 +54,7 @@ interface WorkflowState {
 const priceFeed = new PriceFeedUtil();
 
 // Step 1: Intent Analysis
-async function analyzeIntent(state: WorkflowState): Promise<WorkflowState> {
+async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): Promise<WorkflowState> {
   console.log("🔍 Analyzing user intent...");
 
   const intent = state.intent;
@@ -68,10 +68,10 @@ async function analyzeIntent(state: WorkflowState): Promise<WorkflowState> {
     throw new Error("Invalid intent: amount must be positive");
   }
 
-  // Fetch current prices for the token pair
+  // Fetch live prices from Chainlink feeds on Base Sepolia via CRE EVMClient
   const [priceA, priceB] = await Promise.all([
-    priceFeed.getPrice(intent.tokenA),
-    priceFeed.getPrice(intent.tokenB)
+    priceFeed.getPrice(intent.tokenA, runtime),
+    priceFeed.getPrice(intent.tokenB, runtime),
   ]);
 
   console.log(`  Token A Price: $${priceA}`);
@@ -255,7 +255,7 @@ const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =
   };
 
   let state: WorkflowState = { intent };
-  state = await analyzeIntent(state);
+  state = await analyzeIntent(state, runtime);
   state = await coordinateAgents(state);
   state = await assessRisk(state);
   state = await discoverOpportunity(state);
@@ -279,7 +279,7 @@ export async function main() {
 // Workflow runner for local simulation (not exported - Javy rejects exported fns with params)
 async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowState> {
   let state: WorkflowState = { intent };
-  state = await analyzeIntent(state);
+  state = await analyzeIntent(state); // no runtime → mock prices (local-only path)
   state = await coordinateAgents(state);
   state = await assessRisk(state);
   state = await discoverOpportunity(state);
