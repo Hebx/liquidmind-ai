@@ -2,7 +2,7 @@
 
 ## 1. Intro (30s)
 
-- LiquidMind: AI-driven liquidity management using Chainlink CRE and Uniswap v4 hooks
+- LiquidMind: Chainlink CRE-driven liquidity payload preparation and Base Sepolia submission bridge for Uniswap v4 hooks; AI parsing is the next milestone
 - Show architecture: CRE workflow reads Chainlink feeds → prepares a canonical rebalance payload and optional `updateFee` sidecar → external bridge submits to coordinator and hook
 
 ## 2. CRE Workflow Simulation (2 min)
