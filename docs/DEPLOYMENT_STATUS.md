@@ -44,19 +44,13 @@
 | Active position | [-76440, -75240] |
 | Coordinator LINK | 5.0 LINK |
 
-## Next Milestone
+## Current Milestones
 
 - HTTP-triggered intent ingestion into `liquidmind/agentic-liquidity`
 - CRE workflow deploy/activate after CRE deploy access approval and final deploy-time RPC/key configuration
 - Intent-to-coordinator execution flow as the primary operator path
 
 These items are the active next step, not something this status page claims is already live.
-
-## Deferred / Not Yet Claimed Live
-
-- `x402` payment flows
-- Real A2A orchestration
-- Production cross-chain or CCIP-driven automation
 
 ## Test Evidence
 

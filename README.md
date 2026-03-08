@@ -123,6 +123,21 @@ It does not deploy an HTTP-triggered workflow or prove that the operator-facing 
 
 If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package compile command, `npm run cre-compile` invokes the SDK's local compiler hook used by CRE workflow builds.
 
+### Latest Simulation Result
+
+Latest verified `npm run validate:real` result on `Main`:
+
+- Status: passed
+- Date: `2026-03-08`
+- Live price source: Chainlink Base Sepolia `WETH/USD = $1974.4457`
+- Computed rebalance range: `tickLower = -77100`, `tickUpper = -74700`
+- Prepared coordinator: `0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063`
+- Prepared actions: canonical `rebalance` payload plus `updateFee` sidecar payload
+- Volatility sample: `35.46%` annualized
+- Prepared fee output: `3000`
+
+These values come from a successful non-interactive CRE simulation against live Base Sepolia reads, so the exact price, volatility, ticks, and action payload IDs will change across runs.
+
 ### Legacy local mock demo
 
 ```bash
@@ -158,12 +173,13 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 
 ---
 
-## Roadmap Boundary
+## Current Milestones
 
-- The current execution path is contract deployment plus real CRE workflow compilation from `liquidmind/agentic-liquidity`.
-- The legacy mock demo remains available for local-only experimentation, but it is not the canonical validation path.
-- The next delivery is the authenticated CRE HTTP workflow deployment and activation step, which is currently gated by CRE org deploy access and the required deploy-time RPC/key settings.
-- `x402`, real A2A coordination, and production cross-chain automation are intentionally out of scope for this milestone.
+- Live Base Sepolia contract state is updated and documented around the redeployed hook and coordinator pair.
+- The canonical CRE workflow now validates through non-interactive simulation from `liquidmind/agentic-liquidity` on `Main`.
+- The current operator proof path is `e2e-live.sh`, which becomes full submission evidence when `AGENT_PRIVATE_KEY` is set.
+- The next milestone is authenticated CRE HTTP workflow deploy/activate plus proof of the HTTP-triggered operator path, once CRE org deploy access is enabled.
+- The legacy mock demo remains available for local-only experimentation, but it is not the canonical milestone path.
 
 ---
 
