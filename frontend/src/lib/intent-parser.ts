@@ -8,6 +8,9 @@ const DEFAULT_PROVIDER_URL_PATH = "/v1/chat/completions";
 const DEFAULT_MODEL_TEMPERATURE = 0;
 const DEFAULT_MIN_YIELD = 5;
 const DEFAULT_RISK_TOLERANCE = "medium";
+const DEFAULT_PROVIDER_TIMEOUT_MS = 10_000;
+
+assertServerOnlyModule();
 
 const INTENT_PARSER_SYSTEM_PROMPT = [
   "You are a server-side parser for LiquidMind milestone intents.",
@@ -33,6 +36,7 @@ export type IntentModelOutputProvider = (rawIntent: string) => Promise<unknown>;
 interface CreateOpenAICompatibleIntentProviderOptions {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
+  timeoutMs?: number;
 }
 
 export class IntentParserError extends Error {
@@ -94,6 +98,7 @@ export function createOpenAICompatibleIntentProvider(
 ): IntentModelOutputProvider {
   const env = options.env ?? process.env;
   const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = resolveTimeoutMs(env.INTENT_PARSER_TIMEOUT_MS, options.timeoutMs);
 
   const apiUrl = resolveProviderUrl(env);
   const apiKey = env.INTENT_PARSER_API_KEY;
@@ -114,30 +119,51 @@ export function createOpenAICompatibleIntentProvider(
   }
 
   return async (rawIntent: string) => {
-    const response = await fetchImpl(apiUrl, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: DEFAULT_MODEL_TEMPERATURE,
-        response_format: {
-          type: "json_object",
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort(new Error("Intent parser request timed out."));
+    }, timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetchImpl(apiUrl, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
         },
-        messages: [
-          {
-            role: "system",
-            content: INTENT_PARSER_SYSTEM_PROMPT,
+        body: JSON.stringify({
+          model,
+          temperature: DEFAULT_MODEL_TEMPERATURE,
+          response_format: {
+            type: "json_object",
           },
-          {
-            role: "user",
-            content: buildIntentParserUserPrompt(rawIntent),
-          },
-        ],
-      }),
-    });
+          messages: [
+            {
+              role: "system",
+              content: INTENT_PARSER_SYSTEM_PROMPT,
+            },
+            {
+              role: "user",
+              content: buildIntentParserUserPrompt(rawIntent),
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new IntentParserError(
+          "PROVIDER_ERROR",
+          `Intent parser provider request timed out after ${timeoutMs}ms.`,
+          { cause: error },
+        );
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       throw new IntentParserError(
@@ -180,6 +206,31 @@ function resolveProviderUrl(env: NodeJS.ProcessEnv): string {
   }
 
   return new URL(DEFAULT_PROVIDER_URL_PATH, env.INTENT_PARSER_BASE_URL).toString();
+}
+
+function assertServerOnlyModule(): void {
+  if (typeof window !== "undefined") {
+    throw new Error("intent-parser must only be imported from the server.");
+  }
+}
+
+function resolveTimeoutMs(rawTimeoutMs: string | undefined, timeoutMsOverride: number | undefined): number {
+  const resolvedValue = timeoutMsOverride ?? rawTimeoutMs;
+  if (resolvedValue == null) {
+    return DEFAULT_PROVIDER_TIMEOUT_MS;
+  }
+
+  const parsedTimeoutMs =
+    typeof resolvedValue === "number" ? resolvedValue : Number.parseInt(resolvedValue, 10);
+
+  if (!Number.isFinite(parsedTimeoutMs) || parsedTimeoutMs <= 0) {
+    throw new IntentParserError(
+      "CONFIG_ERROR",
+      "INTENT_PARSER_TIMEOUT_MS must be a positive integer when configured.",
+    );
+  }
+
+  return parsedTimeoutMs;
 }
 
 function buildIntentParserUserPrompt(rawIntent: string): string {

@@ -17,18 +17,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, intent });
   } catch (error) {
     if (error instanceof IntentParserError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        },
-        {
-          status: getIntentParserStatus(error.code),
-        },
-      );
+      logIntentRouteError(error);
+      const { body, status } = createIntentErrorResponse(error);
+      return NextResponse.json(body, { status });
     }
 
     if (error instanceof SyntaxError) {
@@ -61,6 +52,28 @@ export async function POST(request: Request) {
   }
 }
 
+export function createIntentErrorResponse(error: IntentParserError): {
+  body: {
+    ok: false;
+    error: {
+      code: IntentParserError["code"];
+      message: string;
+    };
+  };
+  status: number;
+} {
+  return {
+    body: {
+      ok: false,
+      error: {
+        code: error.code,
+        message: getClientSafeIntentParserMessage(error),
+      },
+    },
+    status: getIntentParserStatus(error.code),
+  };
+}
+
 function getIntentParserStatus(code: IntentParserError["code"]): number {
   switch (code) {
     case "BAD_REQUEST":
@@ -74,4 +87,26 @@ function getIntentParserStatus(code: IntentParserError["code"]): number {
     default:
       return 500;
   }
+}
+
+function getClientSafeIntentParserMessage(error: IntentParserError): string {
+  switch (error.code) {
+    case "BAD_REQUEST":
+    case "VALIDATION_ERROR":
+      return error.message;
+    case "PROVIDER_ERROR":
+      return "Intent parsing is temporarily unavailable.";
+    case "CONFIG_ERROR":
+      return "Intent parsing is not available on this server.";
+    default:
+      return "Unexpected intent parsing failure.";
+  }
+}
+
+function logIntentRouteError(error: IntentParserError): void {
+  if (error.code === "BAD_REQUEST" || error.code === "VALIDATION_ERROR") {
+    return;
+  }
+
+  console.error("[api/intent]", error);
 }

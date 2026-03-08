@@ -158,6 +158,37 @@ test("createOpenAICompatibleIntentProvider parses JSON content from an OpenAI-co
   );
 });
 
+test("createOpenAICompatibleIntentProvider aborts long-running provider calls with a controlled timeout error", async () => {
+  const provider = createOpenAICompatibleIntentProvider({
+    env: {
+      INTENT_PARSER_API_URL: "https://example.com/v1/chat/completions",
+      INTENT_PARSER_API_KEY: "test-key",
+      INTENT_PARSER_MODEL: "gpt-4.1-mini",
+      INTENT_PARSER_TIMEOUT_MS: "5",
+    },
+    fetchImpl: async (_input, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) {
+          reject(new Error("missing signal"));
+          return;
+        }
+
+        signal.addEventListener("abort", () => {
+          reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+        });
+      }),
+  });
+
+  await assert.rejects(
+    () => provider("rebalance 42 base units"),
+    (error: unknown) =>
+      error instanceof IntentParserError &&
+      error.code === "PROVIDER_ERROR" &&
+      /timed out/i.test(error.message),
+  );
+});
+
 test("parseIntentRequestBody requires a non-empty rawIntent string", () => {
   assert.equal(
     parseIntentRequestBody({
