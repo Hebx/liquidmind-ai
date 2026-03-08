@@ -154,6 +154,60 @@ test("normalizeWorkflowIntentInput parses JSON string bodies in wrapper fields",
   });
 });
 
+test("normalizeWorkflowIntentInput unwraps nested wrapper envelopes", () => {
+  const intent = normalizeWorkflowIntentInput({
+    body: {
+      intent: {
+        payload: {
+          tokenA: "weth",
+          tokenB: "usdc",
+          amount: "11",
+          preferredChains: ["base-sepolia"],
+          riskTolerance: "medium",
+          minYield: 6,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 11n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 6,
+  });
+});
+
+test("normalizeWorkflowIntentInput unwraps nested wrappers inside JSON string bodies", () => {
+  const intent = normalizeWorkflowIntentInput({
+    body: JSON.stringify({
+      intent: {
+        payload: {
+          tokenA: "weth",
+          tokenB: "usdc",
+          amount: "13",
+          preferredChains: ["base-sepolia"],
+          riskTolerance: "low",
+          minYield: 4,
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 13n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "low",
+    minYield: 4,
+  });
+});
+
 test("normalizeWorkflowIntentInput prefers body over payload wrappers", () => {
   assert.equal(typeof normalizeWorkflowIntentInput, "function");
 

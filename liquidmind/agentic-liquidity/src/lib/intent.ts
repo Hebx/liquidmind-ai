@@ -1,6 +1,8 @@
 export type RiskTolerance = "low" | "medium" | "high";
 export const SUPPORTED_EXECUTION_CHAIN = "base-sepolia";
 const SUPPORTED_ASSET_PAIR = ["USDC", "WETH"] as const;
+const WRAPPER_KEYS = ["body", "payload", "intent"] as const;
+const MAX_WRAPPER_DEPTH = 5;
 
 export interface LiquidityIntentPayload {
   action?: "rebalance";
@@ -71,18 +73,7 @@ export function normalizeWorkflowIntentInput(
 }
 
 export function extractIntentPayload(input: unknown): unknown {
-  if (input == null || typeof input !== "object" || Array.isArray(input)) {
-    return input;
-  }
-
-  const candidate = input as Record<string, unknown>;
-  for (const key of ["body", "payload", "intent"] as const) {
-    if (candidate[key] != null) {
-      return parseWrappedPayload(candidate[key]);
-    }
-  }
-
-  return input;
+  return unwrapIntentPayload(input, 0);
 }
 
 export function toIntentPayload(intent: LiquidityIntent): LiquidityIntentPayload {
@@ -131,6 +122,26 @@ function parseWrappedPayload(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+function unwrapIntentPayload(value: unknown, depth: number): unknown {
+  if (depth >= MAX_WRAPPER_DEPTH) {
+    return value;
+  }
+
+  const parsedValue = parseWrappedPayload(value);
+  if (parsedValue == null || typeof parsedValue !== "object" || Array.isArray(parsedValue)) {
+    return parsedValue;
+  }
+
+  const candidate = parsedValue as Record<string, unknown>;
+  for (const key of WRAPPER_KEYS) {
+    if (candidate[key] != null) {
+      return unwrapIntentPayload(candidate[key], depth + 1);
+    }
+  }
+
+  return parsedValue;
 }
 
 function normalizeAction(action: unknown): "rebalance" {
