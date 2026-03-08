@@ -135,13 +135,23 @@ function unwrapIntentPayload(value: unknown, depth: number): unknown {
   }
 
   const candidate = parsedValue as Record<string, unknown>;
+  let fallbackValue: unknown = parsedValue;
   for (const key of WRAPPER_KEYS) {
     if (candidate[key] != null) {
-      return unwrapIntentPayload(candidate[key], depth + 1);
+      const unwrappedValue = unwrapIntentPayload(candidate[key], depth + 1);
+      if (isUsableIntentPayloadCandidate(unwrappedValue)) {
+        return unwrappedValue;
+      }
+
+      fallbackValue = unwrappedValue;
     }
   }
 
-  return parsedValue;
+  return fallbackValue;
+}
+
+function isUsableIntentPayloadCandidate(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeAction(action: unknown): "rebalance" {

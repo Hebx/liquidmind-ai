@@ -249,6 +249,30 @@ test("normalizeWorkflowIntentInput prefers body over payload wrappers", () => {
   assert.equal(intent?.amount, 7n);
 });
 
+test("normalizeWorkflowIntentInput falls through when body is unusable and payload is valid", () => {
+  const intent = normalizeWorkflowIntentInput({
+    body: "not-json",
+    payload: JSON.stringify({
+      tokenA: "weth",
+      tokenB: "usdc",
+      amount: "17",
+      preferredChains: ["base-sepolia"],
+      riskTolerance: "medium",
+      minYield: 5,
+    }),
+  });
+
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 17n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+  });
+});
+
 test("toIntentPayload converts bigint amounts into JSON-safe strings", () => {
   assert.equal(typeof toIntentPayload, "function");
 
