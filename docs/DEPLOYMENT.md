@@ -1,63 +1,68 @@
 # Deployment Guide
 
-## Prerequisites
+This document separates what is live now from what is still planned for the CRE milestone.
 
-- [Foundry](https://book.getfoundry.sh/getting-started/installation)
-- [CRE CLI](https://docs.chain.link/cre)
-- Node.js 18+
+## Canonical CRE Package
 
-## Environment Setup
+Use `liquidmind/agentic-liquidity` as the source of truth for the workflow in this milestone. The older `cre-workflow/` directory is legacy reference material, not the active path for root scripts or current deployment guidance.
 
-```bash
-cp .env.example .env
-# Fill in: BASE_SEPOLIA_RPC, PRIVATE_KEY
-```
+## Live Now
 
-## Deploy Contracts
+### Base Sepolia contracts
 
 ```bash
 cd contracts
 forge script script/Deploy.s.sol:DeployLiquidMind \
-  --rpc-url $BASE_SEPOLIA_RPC \
+  --rpc-url "$BASE_SEPOLIA_RPC" \
   --broadcast
 ```
 
 This deploys `LiquidMindCoordinator` and `AgenticLiquidityHook`, wires them together, and registers the deployer as the first agent.
 
-## Initialize Pool + Test Flow
+### Current CRE validation path
 
 ```bash
-cd contracts
-forge script script/TestnetFlow.s.sol:TestnetFlow \
-  --rpc-url $BASE_SEPOLIA_RPC \
-  --broadcast
+cd liquidmind/agentic-liquidity
+npm install
+npm run simulate
 ```
 
-Deploys test routers, initializes a USDC/WETH pool with the hook, adds liquidity, and executes swaps.
+Use this package to validate the current workflow logic and real Chainlink feed reads. If you need a compiled workflow artifact, run:
 
-## Run E2E Tests
+```bash
+cd liquidmind/agentic-liquidity
+npm run cre-compile
+```
+
+### Existing end-to-end script
 
 ```bash
 export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-## Frontend
+This is the current milestone evidence path: contract wiring, simulated CRE output, and on-chain rebalance or fee update execution.
+
+## Next Milestone
+
+### HTTP-triggered intent flow
+
+The next delivery is an HTTP-triggered CRE flow that accepts intent payloads and turns them into coordinator calls from `liquidmind/agentic-liquidity`. That flow is not the live deployment path yet, so this document does not present it as deployed.
+
+## Deferred / Not Live
+
+- `x402` payment flows are deferred.
+- Real A2A orchestration is deferred.
+- Production cross-chain or CCIP-triggered automation is deferred unless independently proven live.
+- Frontend and subgraph work may still be useful locally, but they are not part of the milestone's live deployment claims.
+
+## Local Frontend Development
 
 ```bash
 cd frontend
 cp .env.example .env.local
-# Fill in contract addresses and RPC
 npm install
 npm run dev
 ```
 
-## Subgraph (Goldsky)
-
-```bash
-cd subgraph
-npm install
-npm run codegen
-npm run build
-npm run deploy
-```
+Use the frontend for local inspection and demos. Do not treat it as evidence that the HTTP-triggered workflow milestone is already deployed.
