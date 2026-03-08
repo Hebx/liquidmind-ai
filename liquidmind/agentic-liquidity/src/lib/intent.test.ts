@@ -297,6 +297,28 @@ test("normalizeWorkflowIntentInput falls through when body is a malformed object
   });
 });
 
+test("normalizeWorkflowIntentInput preserves a valid root payload over malformed wrapper siblings", () => {
+  const intent = normalizeWorkflowIntentInput({
+    tokenA: "weth",
+    tokenB: "usdc",
+    amount: "23",
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+    body: { foo: "bar" },
+  });
+
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 23n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+  });
+});
+
 test("toIntentPayload converts bigint amounts into JSON-safe strings", () => {
   assert.equal(typeof toIntentPayload, "function");
 

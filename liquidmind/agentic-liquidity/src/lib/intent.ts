@@ -134,6 +134,10 @@ function unwrapIntentPayload(value: unknown, depth: number): unknown {
     return parsedValue;
   }
 
+  if (isUsableIntentPayloadCandidate(parsedValue)) {
+    return parsedValue;
+  }
+
   const candidate = parsedValue as Record<string, unknown>;
   let fallbackValue: unknown = parsedValue;
   for (const key of WRAPPER_KEYS) {
