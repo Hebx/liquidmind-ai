@@ -151,7 +151,19 @@ function unwrapIntentPayload(value: unknown, depth: number): unknown {
 }
 
 function isUsableIntentPayloadCandidate(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === "object" && !Array.isArray(value);
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.tokenA === "string" &&
+    typeof candidate.tokenB === "string" &&
+    (typeof candidate.amount === "string" || typeof candidate.amount === "bigint") &&
+    Array.isArray(candidate.preferredChains) &&
+    typeof candidate.riskTolerance === "string" &&
+    typeof candidate.minYield === "number"
+  );
 }
 
 function normalizeAction(action: unknown): "rebalance" {

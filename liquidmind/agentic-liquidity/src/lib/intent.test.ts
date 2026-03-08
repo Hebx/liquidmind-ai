@@ -273,6 +273,30 @@ test("normalizeWorkflowIntentInput falls through when body is unusable and paylo
   });
 });
 
+test("normalizeWorkflowIntentInput falls through when body is a malformed object and payload is valid", () => {
+  const intent = normalizeWorkflowIntentInput({
+    body: { foo: "bar" },
+    payload: {
+      tokenA: "weth",
+      tokenB: "usdc",
+      amount: "19",
+      preferredChains: ["base-sepolia"],
+      riskTolerance: "medium",
+      minYield: 5,
+    },
+  });
+
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 19n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+  });
+});
+
 test("toIntentPayload converts bigint amounts into JSON-safe strings", () => {
   assert.equal(typeof toIntentPayload, "function");
 
