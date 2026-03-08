@@ -9,6 +9,7 @@ const DEFAULT_MODEL_TEMPERATURE = 0;
 const DEFAULT_MIN_YIELD = 5;
 const DEFAULT_RISK_TOLERANCE = "medium";
 const DEFAULT_PROVIDER_TIMEOUT_MS = 10_000;
+const MAX_RAW_INTENT_LENGTH = 10_000;
 
 assertServerOnlyModule();
 
@@ -59,7 +60,15 @@ export function parseIntentRequestBody(body: unknown): string {
     throw new IntentParserError("BAD_REQUEST", "rawIntent must be a non-empty string.");
   }
 
-  return rawIntent.trim();
+  const normalizedRawIntent = rawIntent.trim();
+  if (normalizedRawIntent.length > MAX_RAW_INTENT_LENGTH) {
+    throw new IntentParserError(
+      "BAD_REQUEST",
+      `rawIntent is too long. Maximum length is ${MAX_RAW_INTENT_LENGTH} characters.`,
+    );
+  }
+
+  return normalizedRawIntent;
 }
 
 export async function parseIntentWithModel(
@@ -195,7 +204,7 @@ export function createOpenAICompatibleIntentProvider(
 
 function resolveProviderUrl(env: NodeJS.ProcessEnv): string {
   if (env.INTENT_PARSER_API_URL) {
-    return env.INTENT_PARSER_API_URL;
+    return parseProviderUrl(env.INTENT_PARSER_API_URL, "INTENT_PARSER_API_URL");
   }
 
   if (!env.INTENT_PARSER_BASE_URL) {
@@ -205,7 +214,11 @@ function resolveProviderUrl(env: NodeJS.ProcessEnv): string {
     );
   }
 
-  return new URL(DEFAULT_PROVIDER_URL_PATH, env.INTENT_PARSER_BASE_URL).toString();
+  return parseProviderUrl(
+    new URL(DEFAULT_PROVIDER_URL_PATH, parseProviderUrl(env.INTENT_PARSER_BASE_URL, "INTENT_PARSER_BASE_URL"))
+      .toString(),
+    "INTENT_PARSER_BASE_URL",
+  );
 }
 
 function assertServerOnlyModule(): void {
@@ -235,6 +248,16 @@ function resolveTimeoutMs(rawTimeoutMs: string | undefined, timeoutMsOverride: n
   }
 
   return parsedTimeoutMs;
+}
+
+function parseProviderUrl(rawUrl: string, configKey: "INTENT_PARSER_API_URL" | "INTENT_PARSER_BASE_URL"): string {
+  try {
+    return new URL(rawUrl).toString();
+  } catch (error) {
+    throw new IntentParserError("CONFIG_ERROR", `${configKey} must be a valid URL.`, {
+      cause: error,
+    });
+  }
 }
 
 function buildIntentParserUserPrompt(rawIntent: string): string {

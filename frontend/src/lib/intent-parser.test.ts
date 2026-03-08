@@ -96,6 +96,32 @@ test("createOpenAICompatibleIntentProvider requires server-side provider configu
   );
 });
 
+test("createOpenAICompatibleIntentProvider rejects malformed parser URLs as config errors", () => {
+  for (const env of [
+    {
+      INTENT_PARSER_API_URL: "not-a-url",
+      INTENT_PARSER_API_KEY: "test-key",
+      INTENT_PARSER_MODEL: "gpt-4.1-mini",
+    },
+    {
+      INTENT_PARSER_BASE_URL: "still-not-a-url",
+      INTENT_PARSER_API_KEY: "test-key",
+      INTENT_PARSER_MODEL: "gpt-4.1-mini",
+    },
+  ]) {
+    assert.throws(
+      () =>
+        createOpenAICompatibleIntentProvider({
+          env,
+        }),
+      (error: unknown) =>
+        error instanceof IntentParserError &&
+        error.code === "CONFIG_ERROR" &&
+        /URL/i.test(error.message),
+    );
+  }
+});
+
 test("createOpenAICompatibleIntentProvider rejects malformed timeout strings", () => {
   for (const timeoutValue of ["10s", "5000ms"]) {
     assert.throws(
@@ -223,5 +249,15 @@ test("parseIntentRequestBody requires a non-empty rawIntent string", () => {
       error instanceof IntentParserError &&
       error.code === "BAD_REQUEST" &&
       /rawIntent/i.test(error.message),
+  );
+});
+
+test("parseIntentRequestBody rejects rawIntent values that exceed the max supported length", () => {
+  assert.throws(
+    () => parseIntentRequestBody({ rawIntent: "a".repeat(10_001) }),
+    (error: unknown) =>
+      error instanceof IntentParserError &&
+      error.code === "BAD_REQUEST" &&
+      /too long/i.test(error.message),
   );
 });

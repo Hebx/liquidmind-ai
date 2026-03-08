@@ -117,6 +117,50 @@ test("POST returns sanitized config errors through the route handler", async () 
   }
 });
 
+test("POST returns sanitized config errors for malformed parser URLs", async () => {
+  const previousEnv = {
+    ...process.env,
+  };
+  const previousConsoleError = console.error;
+  const loggedErrors: unknown[] = [];
+
+  process.env.INTENT_PARSER_API_URL = "not-a-url";
+  process.env.INTENT_PARSER_API_KEY = "test-key";
+  process.env.INTENT_PARSER_MODEL = "gpt-4.1-mini";
+  delete process.env.INTENT_PARSER_BASE_URL;
+  delete process.env.INTENT_PARSER_TIMEOUT_MS;
+  console.error = (...args: unknown[]) => {
+    loggedErrors.push(args);
+  };
+
+  try {
+    const response = await POST(
+      new Request("http://localhost/api/intent", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: "CONFIG_ERROR",
+        message: "Intent parsing is not available on this server.",
+      },
+    });
+    assert.equal(loggedErrors.length, 1);
+  } finally {
+    process.env = previousEnv;
+    console.error = previousConsoleError;
+  }
+});
+
 test("POST returns sanitized provider errors through the route handler", async () => {
   const previousEnv = {
     ...process.env,
