@@ -4,6 +4,8 @@ pragma solidity 0.8.26;
 import {Test, console2} from "forge-std/Test.sol";
 import {AgenticLiquidityHook} from "../../src/AgenticLiquidityHook.sol";
 import {LiquidMindCoordinator} from "../../src/LiquidMindCoordinator.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {LPFeeLibrary} from "v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolId} from "v4-core/src/types/PoolId.sol";
 
 /**
@@ -42,6 +44,12 @@ contract BaseSepoliaForkTest is Test {
         ethFeed     = IAggregatorV3(FEED_ETH_USD);
         btcFeed     = IAggregatorV3(FEED_BTC_USD);
         linkFeed    = IAggregatorV3(FEED_LINK_USD);
+    }
+
+    function _overlayMergedHookCode() internal {
+        AgenticLiquidityHook mergedHookImpl = new AgenticLiquidityHook(IPoolManager(POOL_MANAGER), DEPLOYER);
+        vm.etch(HOOK, address(mergedHookImpl).code);
+        hook = AgenticLiquidityHook(HOOK);
     }
 
     // ── Chainlink price feed tests ────────────────────────────────────────────
@@ -167,7 +175,7 @@ contract BaseSepoliaForkTest is Test {
         bytes memory encodedKey = abi.encode(
             address(0x036CbD53842c5426634e7929541eC2318f3dCF7e), // USDC
             address(0x4200000000000000000000000000000000000006), // WETH
-            uint24(3000),
+            LPFeeLibrary.DYNAMIC_FEE_FLAG,
             int24(60),
             HOOK
         );
@@ -189,12 +197,16 @@ contract BaseSepoliaForkTest is Test {
     // ── executeLocalHookAction: updateFee (Milestone 2 — Volatility Oracle) ──
 
     function test_Fork_ExecuteLocalHookAction_UpdateFee() public {
+        // Overlay the merged local hook bytecode so the fork test exercises the
+        // current repository hook semantics against live Base Sepolia wiring.
+        _overlayMergedHookCode();
+
         // Pool config must be seeded first (normally done by afterInitialize).
         // On a fork without an initialized pool we set it manually as the owner.
         bytes memory encodedKey = abi.encode(
             address(0x036CbD53842c5426634e7929541eC2318f3dCF7e), // USDC
             address(0x4200000000000000000000000000000000000006), // WETH
-            uint24(3000),
+            LPFeeLibrary.DYNAMIC_FEE_FLAG,
             int24(60),
             HOOK
         );
@@ -228,6 +240,23 @@ contract BaseSepoliaForkTest is Test {
             actionData
         );
         assertTrue(success, "executeLocalHookAction updateFee failed");
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        AgenticLiquidityHook.PoolConfig memory updatedConfig = hook.getPoolConfig(PoolId.wrap(poolId));
+        assertEq(updatedConfig.baseFee, 3000 + maxStep, "merged hook should cap the fee update step");
+        assertEq(hook.lastFeeUpdateTimestamp(PoolId.wrap(poolId)), block.timestamp, "fee update timestamp not recorded");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgenticLiquidityHook.FeeUpdateCooldownActive.selector,
+                block.timestamp + hook.FEE_UPDATE_COOLDOWN()
+            )
+        );
+        coordinator.executeLocalHookAction(
+            keccak256(abi.encodePacked("fork-test-updatefee-cooldown", block.timestamp)),
+            "updateFee",
+            encodedKey,
+            abi.encode(uint24(6000))
+        );
 
         vm.stopPrank();
     }

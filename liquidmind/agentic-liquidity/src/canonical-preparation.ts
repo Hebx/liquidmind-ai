@@ -57,6 +57,7 @@ export const CONTRACTS = {
   WETH: "0x4200000000000000000000000000000000000006" as Hex,
   USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Hex,
 } as const;
+export const UNISWAP_DYNAMIC_FEE_FLAG = 0x800000;
 
 export function prepareCanonicalActions(
   intent: LiquidityIntent,
@@ -158,7 +159,7 @@ function buildRebalanceCalldata(
   actionId: Hex,
 ): Omit<PreparedHookAction, "coordinator"> {
   const tickSpacing = 60;
-  const poolFee = 3000;
+  const poolFee = UNISWAP_DYNAMIC_FEE_FLAG;
   const encodedPoolKey = encodeAbiParameters(
     [
       {
@@ -212,7 +213,7 @@ function buildUpdateFeeCalldata(
   actionId: Hex,
 ): Omit<PreparedFeeAction, "coordinator" | "volatility"> {
   const tickSpacing = 60;
-  const poolFee = 3000;
+  const poolFee = UNISWAP_DYNAMIC_FEE_FLAG;
   const encodedPoolKey = encodeAbiParameters(
     [
       {
