@@ -169,10 +169,10 @@ export default function Home() {
         <div className="flex whitespace-nowrap animate-marquee py-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-8 px-8 text-xs font-mono text-text-secondary">
-              <span>CHAINLINK CRE · VERIFIED EXECUTION</span>
+              <span>CHAINLINK CRE · REAL READS</span>
               <span>UNISWAP V4 HOOKS · DYNAMIC FEES</span>
-              <span>X402 · PAY-PER-EXECUTION</span>
-              <span>A2A AGENT SWARM · LIVE</span>
+              <span>HTTP INTENT FLOW · NEXT MILESTONE</span>
+              <span>BASE SEPOLIA · LIVE CONTRACTS</span>
             </div>
           ))}
         </div>
@@ -189,7 +189,7 @@ export default function Home() {
             </h1>
             <p className="text-lg text-text-secondary max-w-xl">
               An autonomous liquidity machine that converts your intent into verifiable on-chain execution.
-              Powered by Chainlink CRE workflows, Uniswap v4 hooks, and x402 escrow.
+              Powered by Chainlink CRE workflows, Uniswap v4 hooks, and live Base Sepolia contract automation.
             </p>
             <div className="flex flex-wrap gap-4">
               <button className="btn-brutal-primary">DEPLOY TO BASE</button>
@@ -204,7 +204,7 @@ export default function Home() {
                   { step: 'INTENT PARSE', status: overview.ok ? 'OK' : 'SYNCING', color: 'text-lime' },
                   { step: 'COORDINATOR', status: overview.coordinatorDeployed ? 'LIVE' : 'OFFLINE', color: 'text-cyan' },
                   { step: 'HOOK', status: overview.hookDeployed ? 'LIVE' : 'OFFLINE', color: 'text-magenta' },
-                  { step: 'ESCROW', status: 'LOCKED', color: 'text-lime' },
+                  { step: 'HTTP FLOW', status: 'NEXT', color: 'text-lime' },
                 ].map((s) => (
                   <div key={s.step} className="flex items-center justify-between border-[var(--border-thin)] border-border p-3">
                     <span className="text-xs font-mono text-text-secondary">{s.step}</span>
@@ -229,7 +229,7 @@ export default function Home() {
               <div className="flex items-end justify-between mb-6">
                 <div>
                   <h2 className="font-display text-4xl tracking-widest text-lime">ACTIVE POSITIONS</h2>
-                  <p className="text-[10px] font-mono text-text-secondary">MANAGED BY AUTONOMOUS AGENTS</p>
+                  <p className="text-[10px] font-mono text-text-secondary">MANAGED BY COORDINATOR + HOOK</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-mono text-text-muted uppercase">Active Pools</p>
@@ -261,7 +261,7 @@ export default function Home() {
               )}
 
               <div className="mt-6 border-[var(--border-thin)] border-lime/40 p-4">
-                <div className="text-[10px] font-mono text-text-secondary">AGENT INSIGHT</div>
+                <div className="text-[10px] font-mono text-text-secondary">SYSTEM INSIGHT</div>
                 <p className="text-sm text-text-primary mt-2">
                   Hook owner: {overview.hookOwner ? overview.hookOwner.slice(0, 6) + '…' + overview.hookOwner.slice(-4) : '—'} ·
                   Coordinator: {overview.hookCoordinator ? overview.hookCoordinator.slice(0, 6) + '…' + overview.hookCoordinator.slice(-4) : '—'}
@@ -276,7 +276,7 @@ export default function Home() {
               </div>
               <div className="card-brutal">
                 <p className="text-[10px] font-mono text-text-muted uppercase">Escrow</p>
-                <p className="text-sm font-mono text-lime mt-2">X402 PROTOCOL</p>
+                <p className="text-sm font-mono text-lime mt-2">HTTP INTENT FLOW (NEXT)</p>
               </div>
               <div className="card-brutal">
                 <p className="text-[10px] font-mono text-text-muted uppercase">Identity</p>

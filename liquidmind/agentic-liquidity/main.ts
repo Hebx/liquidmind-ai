@@ -1,13 +1,15 @@
 /**
  * Agentic Liquidity CRE Workflow
  *
- * Implements the 6-step Chainlink CRE workflow for autonomous liquidity management:
- * 1. Intent Analysis
- * 2. Agent Coordination (A2A)
- * 3. Risk Assessment
- * 4. Opportunity Discovery
- * 5. Execution via x402
- * 6. Monitoring & Rebalancing
+ * Current milestone workflow for:
+ * 1. Interpreting liquidity intent inputs
+ * 2. Computing fee and range guidance from market data
+ * 3. Preparing action payloads for Base Sepolia coordinator execution
+ *
+ * Notes:
+ * - Real Chainlink price and historical round reads are part of the live path.
+ * - HTTP-triggered intent ingestion is the next milestone.
+ * - A2A, x402, and broader cross-chain execution remain exploratory or deferred.
  */
 
 import { cre, type Runtime } from "@chainlink/cre-sdk";
@@ -313,12 +315,12 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
   };
 }
 
-// Step 2: A2A Agent Coordination
+// Step 2: internal strategy coordination used for simulation and planning
 async function coordinateAgents(state: WorkflowState): Promise<WorkflowState> {
-  console.log("🤖 Coordinating A2A agents...");
+  console.log("🤖 Coordinating internal strategy modules...");
 
-  // Simulate A2A agent calls
-  // In production, these would be actual HTTP/gRPC calls to agent services
+  // Simulated coordination helpers for local workflow evaluation.
+  // This should not be read as proof of live external A2A orchestration.
   const consensus: AgentConsensus = await Promise.all([
     // Route Optimizer Agent
     callRouteOptimizer(state.intent),
@@ -397,16 +399,16 @@ async function discoverOpportunity(state: WorkflowState): Promise<WorkflowState>
   return state;
 }
 
-// Step 5: Execute via x402 Payment
+// Step 5: prepare execution details for downstream action handling
 async function executeWithPayment(state: WorkflowState): Promise<WorkflowState> {
-  console.log("💰 Executing with x402 payment...");
+  console.log("💰 Preparing execution settlement details...");
 
   const { consensus, intent } = state;
 
-  // x402 payment escrow
+  // Local placeholder settlement calculation used by the simulation path
   const paymentAmount = calculateExecutionFee(intent.amount);
 
-  // Lock payment in escrow
+  // Build a local receipt for simulated settlement handling
   const escrowReceipt = await lockPaymentEscrow({
     amount: paymentAmount,
     beneficiary: consensus!.routeOptimizer.recommendedPool,
@@ -597,7 +599,7 @@ interface EscrowConfig {
 }
 
 async function lockPaymentEscrow(config: EscrowConfig) {
-  // In production: x402 protocol integration
+  // Placeholder for any future settlement integration.
   console.log(`  🔒 Locking payment escrow: ${config.condition}`);
   return {
     id: `escrow-${Date.now()}`,
@@ -615,7 +617,7 @@ interface DeploymentConfig {
 }
 
 async function executeLiquidityDeployment(config: DeploymentConfig): Promise<string> {
-  // In production: CCIP + Uniswap v4 hook execution
+  // Placeholder deployment flow used by local workflow simulation.
   console.log(`  🚀 Deploying liquidity to pool ${config.pool.slice(0, 10)}...`);
   return `0x${Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join("")}`;
 }

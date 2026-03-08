@@ -6,6 +6,64 @@ This document separates what is live now from what is still planned for the CRE 
 
 Use `liquidmind/agentic-liquidity` as the source of truth for the workflow in this milestone. The older `cre-workflow/` directory is legacy reference material, not the active path for root scripts or current deployment guidance.
 
+## Prerequisites
+
+- Foundry
+- Node.js 18+
+- npm
+- A Base Sepolia RPC URL
+- A funded private key for testnet contract actions
+- Optional: CRE CLI if you want to compile or validate CRE artifacts locally
+
+## Environment Setup
+
+### Contracts
+
+Create `contracts/.env` from the example values:
+
+```bash
+cat > contracts/.env <<'EOF'
+BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+BASESCAN_API_KEY=YOUR_BASESCAN_API_KEY
+EOF
+```
+
+Minimum required for the documented contract commands:
+
+- `BASE_SEPOLIA_RPC`
+- `PRIVATE_KEY`
+
+### Canonical CRE package
+
+Create `liquidmind/agentic-liquidity/.env` from the package example:
+
+```bash
+cat > liquidmind/agentic-liquidity/.env <<'EOF'
+BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
+PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+CRE_ETH_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
+EOF
+```
+
+Use this env file for local simulation and CRE-oriented validation work. It supports the current development flow; it does not mean the HTTP-triggered operator path is already live.
+
+### Frontend
+
+The frontend does not ship with an `.env.example`, so set the values it currently reads in `frontend/.env.local`:
+
+```bash
+cat > frontend/.env.local <<'EOF'
+NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
+NEXT_PUBLIC_COORDINATOR_ADDRESS=0x268c2E3D23f5cDDAA0D0B40142053414cC05991b
+NEXT_PUBLIC_HOOK_ADDRESS=0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0
+NEXT_PUBLIC_SUBGRAPH_URL=https://YOUR_SUBGRAPH_URL
+NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=YOUR_PROJECT_ID
+EOF
+```
+
+The frontend also accepts `BASE_SEPOLIA_RPC` server-side, but the `NEXT_PUBLIC_*` variables above are the clearest way to run the current UI locally.
+
 ## Live Now
 
 ### Base Sepolia contracts
@@ -27,11 +85,19 @@ npm install
 npm run simulate
 ```
 
-Use this package to validate the current workflow logic and real Chainlink feed reads. If you need a compiled workflow artifact, run:
+Use this package to validate the current workflow logic and real Chainlink feed reads.
+
+If you need a compiled workflow artifact, run:
 
 ```bash
 cd liquidmind/agentic-liquidity
 npm run cre-compile
+```
+
+If you want the root-script equivalent, you can also run:
+
+```bash
+npm run simulate:cre
 ```
 
 ### Existing end-to-end script
@@ -41,7 +107,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-This is the current milestone evidence path: contract wiring, simulated CRE output, and on-chain rebalance or fee update execution.
+`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. This is the current milestone evidence path: contract wiring, simulated CRE output, and on-chain rebalance or fee update execution.
 
 ## Next Milestone
 
@@ -60,9 +126,8 @@ The next delivery is an HTTP-triggered CRE flow that accepts intent payloads and
 
 ```bash
 cd frontend
-cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Use the frontend for local inspection and demos. Do not treat it as evidence that the HTTP-triggered workflow milestone is already deployed.
+Use the frontend for local inspection and demos after creating `frontend/.env.local` with the variables listed above. Do not treat it as evidence that the HTTP-triggered workflow milestone is already deployed.

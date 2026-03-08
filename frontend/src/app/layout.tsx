@@ -24,8 +24,8 @@ const plusJakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: "LIQUIDMIND | Autonomous Liquidity Execution",
-  description: "AI agents for cross-chain DeFi liquidity management. Chainlink CRE, x402 payments, Uniswap v4 hooks.",
-  keywords: ["DeFi", "AI agents", "liquidity", "Chainlink", "Uniswap v4", "x402"],
+  description: "LiquidMind dashboard for Base Sepolia liquidity automation with Chainlink CRE, live hook telemetry, and the next HTTP intent milestone.",
+  keywords: ["DeFi", "liquidity", "Chainlink", "Uniswap v4", "Base Sepolia", "CRE"],
 };
 
 export default function RootLayout({

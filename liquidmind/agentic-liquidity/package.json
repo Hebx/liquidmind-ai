@@ -1,7 +1,7 @@
 {
-  "name": "@liquidmind-ai/cre-workflow",
+  "name": "@liquidmind-ai/agentic-liquidity",
   "version": "1.0.0",
-  "description": "Chainlink CRE workflow for autonomous liquidity management",
+  "description": "Canonical LiquidMind CRE package for Chainlink reads, volatility analysis, and Base Sepolia action preparation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -20,7 +20,7 @@
     "defi",
     "liquidity",
     "uniswap",
-    "ai-agents"
+    "base-sepolia"
   ],
   "author": "Hebx",
   "license": "MIT",
