@@ -1,12 +1,16 @@
 /**
- * Mock Workflow for Local Testing
- * 
- * Simulates the full 6-step CRE workflow without:
+ * Legacy Mock Workflow for Local Demo Testing
+ *
+ * This file is retained only for local/demo scenarios.
+ * It is NOT the canonical LiquidMind CRE validation path and should NOT be
+ * treated as evidence for the live milestone implementation.
+ *
+ * It simulates the full 6-step workflow without:
  * - Real blockchain transactions
  * - Actual A2A agent calls
  * - Real x402 payments
- * 
- * Use this for development and CI/CD testing.
+ *
+ * Prefer `npm run validate:real` for the canonical CRE workflow validation step.
  */
 
 import { PriceFeedUtil, formatPrice, calculateUsdValue } from "./utils/price-feed.js";
@@ -292,9 +296,10 @@ async function step6MonitorRebalance(state: MockState): Promise<MockState> {
 // ============================================================================
 async function runMockWorkflow(): Promise<void> {
   console.clear();
-  log("🚀", "LiquidMind CRE Workflow - MOCK MODE", "cyan");
+  log("🚀", "LiquidMind CRE Workflow - LEGACY MOCK MODE", "cyan");
   console.log("=".repeat(50));
-  console.log(`${colors.dim}This is a simulation. No real transactions will occur.${colors.reset}`);
+  console.log(`${colors.dim}Legacy local demo only. This does not validate the canonical CRE workflow path.${colors.reset}`);
+  console.log(`${colors.dim}No real transactions or live milestone execution occur here.${colors.reset}`);
   console.log("=".repeat(50));
   
   // Initial state
@@ -326,7 +331,7 @@ async function runMockWorkflow(): Promise<void> {
     const duration = Date.now() - startTime;
     
     console.log("\n" + "=".repeat(50));
-    log("✅", "WORKFLOW COMPLETED SUCCESSFULLY", "green");
+    log("✅", "LEGACY MOCK WORKFLOW COMPLETED", "green");
     console.log("=".repeat(50));
     
     logDetail("Execution Time", `${duration}ms`);
@@ -337,10 +342,10 @@ async function runMockWorkflow(): Promise<void> {
     logDetail("Projected APY", `${state.consensus!.yieldAggregator.projectedYield.toFixed(2)}%`);
     logDetail("Risk Score", `${state.consensus!.riskAnalyzer.riskScore}/100`);
     
-    console.log("\n" + colors.dim + "Next Steps:" + colors.reset);
-    console.log("  • Monitor position via Chainlink Automation");
-    console.log("  • Rebalance will trigger at 5% drift");
-    console.log("  • Check status: npm run status -- --position " + state.positionId);
+    console.log("\n" + colors.dim + "Reminder:" + colors.reset);
+    console.log("  • This output is local demo data only");
+    console.log("  • Use npm run validate:real for the canonical CRE validation step");
+    console.log("  • Do not treat this mock output as live milestone evidence");
     
   } catch (error) {
     console.log("\n" + "=".repeat(50));

@@ -7,9 +7,11 @@
   "scripts": {
     "build": "tsc",
     "cre-compile": "bunx cre-compile ./main.ts .cre_build_tmp.wasm",
+    "validate:real": "npm run cre-compile",
     "postinstall": "bunx cre-setup",
     "dev": "tsx src/agentic-liquidity.ts",
-    "simulate": "tsx src/mock-workflow.ts",
+    "simulate": "npm run simulate:mock",
+    "simulate:mock": "tsx src/mock-workflow.ts",
     "test": "jest",
     "lint": "eslint src/**/*.ts"
   },

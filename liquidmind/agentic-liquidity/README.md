@@ -16,8 +16,9 @@ This directory, `liquidmind/agentic-liquidity`, is the active workflow path for 
 ### Current Dev/Test Flow
 
 - Local development and testing use this package directly.
-- `npm run simulate` is the current package-level validation path.
-- `npm run cre-compile` is available when you want to compile the workflow entrypoint for CRE-oriented validation.
+- `npm run validate:real` is the canonical package-level validation path for the real CRE workflow entrypoint.
+- `npm run cre-compile` is the direct compile command behind that real-workflow validation path.
+- `npm run simulate:mock` remains available only for legacy local demo output.
 - Cron-style scheduling is part of the current simulation and configuration path for development, not the final operator-facing architecture.
 
 ### Next Milestone
@@ -41,14 +42,23 @@ cd liquidmind/agentic-liquidity
 npm install
 ```
 
-### Simulate Current Workflow Logic
+### Validate the Real CRE Workflow Entry Point
 
 ```bash
 cd liquidmind/agentic-liquidity
-npm run simulate
+npm run validate:real
 ```
 
-Use this to validate the current development flow and inspect computed outputs locally.
+Use this to validate the canonical CRE workflow entrypoint used for the current milestone.
+
+### Legacy Local Mock Demo
+
+```bash
+cd liquidmind/agentic-liquidity
+npm run simulate:mock
+```
+
+This executes `src/mock-workflow.ts`, which is retained for local demo output only. It is not evidence of the live milestone path.
 
 ### Compile the Workflow Entry Point
 
@@ -79,7 +89,7 @@ liquidmind/agentic-liquidity/
 |- config.staging.json         # Current dev/test trigger config
 |- config.production.json      # Production-oriented config scaffold
 |- src/utils/price-feed.ts     # Chainlink price and volatility reads
-|- src/mock-workflow.ts        # Local simulation flow
+|- src/mock-workflow.ts        # Legacy local demo flow (not canonical validation)
 `- package.json                # Package scripts and dependencies
 ```
 
@@ -91,7 +101,8 @@ liquidmind/agentic-liquidity/
 
 ## Validation Guidance
 
-- Use `npm run simulate` for package-level validation.
+- Use `npm run validate:real` for canonical package-level validation.
+- Use `npm run simulate:mock` only when you explicitly want the legacy local demo flow.
 - Use the repo-level deployment and status docs for live Base Sepolia contract evidence.
 - Treat `cre-workflow/` as legacy material if you encounter it elsewhere in the repo.
 

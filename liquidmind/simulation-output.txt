@@ -1,3 +1,9 @@
+LEGACY LOCAL MOCK OUTPUT ONLY
+This file is retained for historical/demo reference.
+It does not validate the canonical LiquidMind CRE workflow path and should not be treated as live milestone evidence.
+
+--- original captured output below ---
+
 Initializing...
 Checking RPC connectivity...
 Compiling workflow...

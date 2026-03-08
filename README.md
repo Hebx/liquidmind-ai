@@ -109,10 +109,21 @@ liquidmind-ai/
 ```bash
 cd liquidmind/agentic-liquidity
 npm install
-npm run simulate
+npm run validate:real
 ```
 
-Use `npm run cre-compile` in the same directory if you want to compile the workflow entrypoint to WASM.
+This is the canonical package-level validation path for the real CRE workflow entrypoint. It compiles `main.ts` to a CRE workflow artifact.
+
+If you need the direct equivalent, `npm run cre-compile` performs the same real-workflow validation step.
+
+### Legacy local mock demo
+
+```bash
+cd liquidmind/agentic-liquidity
+npm run simulate:mock
+```
+
+This runs the legacy local mock demo in `src/mock-workflow.ts`. It is useful for local UI or developer demos, but it is not evidence of the live milestone path.
 
 ### Run Fork Tests
 
@@ -128,7 +139,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-This validates the current milestone: contract wiring, live Chainlink reads, simulated CRE output, and on-chain rebalance or fee update execution.
+This validates the current milestone: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update execution.
 
 ### Deploy contracts to Base Sepolia
 
@@ -142,7 +153,8 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 
 ## Roadmap Boundary
 
-- The current execution path is contract deployment plus CRE simulation or compilation from `liquidmind/agentic-liquidity`.
+- The current execution path is contract deployment plus real CRE workflow compilation from `liquidmind/agentic-liquidity`.
+- The legacy mock demo remains available for local-only experimentation, but it is not the canonical validation path.
 - The next delivery is an HTTP-triggered intent flow for the CRE package.
 - `x402`, real A2A coordination, and production cross-chain automation are intentionally out of scope for this milestone.
 
