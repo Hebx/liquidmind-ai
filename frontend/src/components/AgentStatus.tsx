@@ -3,9 +3,9 @@
 import React from 'react';
 
 const agents = [
-  { name: 'ROUTE OPTIMIZER', status: 'Mapping pools', color: 'text-cyan', pulse: 'bg-cyan' },
-  { name: 'RISK ANALYZER', status: 'Stability check', color: 'text-magenta', pulse: 'bg-magenta' },
-  { name: 'YIELD AGGREGATOR', status: 'APY scan', color: 'text-lime', pulse: 'bg-lime' },
+  { name: 'ROUTE OPTIMIZER', status: 'Simulation placeholder', color: 'text-cyan', pulse: 'bg-cyan' },
+  { name: 'RISK ANALYZER', status: 'Simulation placeholder', color: 'text-magenta', pulse: 'bg-magenta' },
+  { name: 'YIELD AGGREGATOR', status: 'Simulation placeholder', color: 'text-lime', pulse: 'bg-lime' },
 ];
 
 type AgentStatusProps = {
@@ -19,8 +19,8 @@ export default function AgentStatus({ agentCount, coordinator }: AgentStatusProp
       <div className="absolute -top-6 -right-6 w-20 h-20 border-[var(--border-thick)] border-cyan opacity-20" />
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-display text-2xl tracking-widest text-cyan">AGENT SWARM</h2>
-          <div className="text-[10px] font-mono text-text-secondary">A2A · LIVE</div>
+          <h2 className="font-display text-2xl tracking-widest text-cyan">STRATEGY MODULES</h2>
+          <div className="text-[10px] font-mono text-text-secondary">PREVIEW · DEFERRED</div>
         </div>
 
         <div className="space-y-3">
@@ -32,7 +32,7 @@ export default function AgentStatus({ agentCount, coordinator }: AgentStatusProp
               </div>
               <div className="flex items-center gap-2">
                 <div className={`h-2 w-2 ${agent.pulse} pulse-glow`} />
-                <span className="text-[10px] font-mono text-text-muted">ACTIVE</span>
+                <span className="text-[10px] font-mono text-text-muted">NOT LIVE</span>
               </div>
             </div>
           ))}
@@ -45,7 +45,7 @@ export default function AgentStatus({ agentCount, coordinator }: AgentStatusProp
           </span>
         </div>
         <div className="mt-2 flex items-center justify-between">
-          <span className="text-[10px] font-mono text-text-secondary">AGENTS</span>
+          <span className="text-[10px] font-mono text-text-secondary">REGISTRY COUNT</span>
           <span className="text-[10px] font-mono text-lime">{agentCount ?? '0'}</span>
         </div>
       </div>

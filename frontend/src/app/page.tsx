@@ -183,17 +183,17 @@ export default function Home() {
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 mb-12">
           <div className="lg:col-span-7 space-y-6">
             <h1 className="font-display text-7xl leading-[0.9] text-stroke-lime">
-              INTENT →
+              READS →
               <br />
-              EXECUTION
+              AUTOMATION
             </h1>
             <p className="text-lg text-text-secondary max-w-xl">
-              An autonomous liquidity machine that converts your intent into verifiable on-chain execution.
-              Powered by Chainlink CRE workflows, Uniswap v4 hooks, and live Base Sepolia contract automation.
+              Live today: real Chainlink reads and Base Sepolia coordinator plus hook automation.
+              Next: HTTP intent intake and AI-assisted parsing for operator workflows.
             </p>
             <div className="flex flex-wrap gap-4">
-              <button className="btn-brutal-primary">DEPLOY TO BASE</button>
-              <button className="btn-brutal">VIEW AGENT LOGS</button>
+              <button className="btn-brutal-primary">VIEW BASE STATUS</button>
+              <button className="btn-brutal">VIEW ACTIVITY LOGS</button>
             </div>
           </div>
           <div className="lg:col-span-5">
@@ -201,7 +201,7 @@ export default function Home() {
               <div className="text-[10px] font-mono text-text-muted">EXECUTION RAIL</div>
               <div className="mt-6 space-y-4">
                 {[
-                  { step: 'INTENT PARSE', status: overview.ok ? 'OK' : 'SYNCING', color: 'text-lime' },
+                  { step: 'CHAINLINK READS', status: overview.ok ? 'READY' : 'SYNCING', color: 'text-lime' },
                   { step: 'COORDINATOR', status: overview.coordinatorDeployed ? 'LIVE' : 'OFFLINE', color: 'text-cyan' },
                   { step: 'HOOK', status: overview.hookDeployed ? 'LIVE' : 'OFFLINE', color: 'text-magenta' },
                   { step: 'HTTP FLOW', status: 'NEXT', color: 'text-lime' },
@@ -275,19 +275,19 @@ export default function Home() {
                 <p className="text-sm font-mono text-cyan mt-2">CHAINLINK CRE</p>
               </div>
               <div className="card-brutal">
-                <p className="text-[10px] font-mono text-text-muted uppercase">Escrow</p>
+                <p className="text-[10px] font-mono text-text-muted uppercase">Intent Flow</p>
                 <p className="text-sm font-mono text-lime mt-2">HTTP INTENT FLOW (NEXT)</p>
               </div>
               <div className="card-brutal">
-                <p className="text-[10px] font-mono text-text-muted uppercase">Identity</p>
-                <p className="text-sm font-mono text-magenta mt-2">VERIFIED AI</p>
+                <p className="text-[10px] font-mono text-text-muted uppercase">AI Parser</p>
+                <p className="text-sm font-mono text-magenta mt-2">UPCOMING</p>
               </div>
             </div>
 
             <div className="card-brutal">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-display text-2xl tracking-widest text-text-primary">SYSTEM HEALTH</h3>
-                <span className="text-[10px] font-mono text-text-secondary">LIVE</span>
+                <span className="text-[10px] font-mono text-text-secondary">BASE SEPOLIA</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="border-[var(--border-thin)] border-border p-3">

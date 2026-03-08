@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@liquidmind-ai/cre-workflow",
+      "name": "@liquidmind-ai/agentic-liquidity",
       "dependencies": {
         "@chainlink/cre-sdk": "^1.1.1",
         "axios": "^1.6.0",

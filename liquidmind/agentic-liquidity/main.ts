@@ -315,12 +315,12 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
   };
 }
 
-// Step 2: internal strategy coordination used for simulation and planning
+// Step 2: simulation-only strategy coordination used for local planning output
 async function coordinateAgents(state: WorkflowState): Promise<WorkflowState> {
-  console.log("🤖 Coordinating internal strategy modules...");
+  console.log("🤖 Running simulated strategy modules...");
 
-  // Simulated coordination helpers for local workflow evaluation.
-  // This should not be read as proof of live external A2A orchestration.
+  // Simulation-only coordination helpers for local workflow evaluation.
+  // These outputs are synthetic placeholders and not live external orchestration.
   const consensus: AgentConsensus = await Promise.all([
     // Route Optimizer Agent
     callRouteOptimizer(state.intent),
@@ -334,9 +334,9 @@ async function coordinateAgents(state: WorkflowState): Promise<WorkflowState> {
     yieldAggregator
   }));
 
-  console.log(`  ✅ Route Optimizer: Pool ${consensus.routeOptimizer.recommendedPool}`);
-  console.log(`  ✅ Risk Analyzer: Score ${consensus.riskAnalyzer.riskScore}/100`);
-  console.log(`  ✅ Yield Aggregator: APY ${consensus.yieldAggregator.projectedYield}%`);
+  console.log(`  ✅ Simulated route optimizer output: Pool ${consensus.routeOptimizer.recommendedPool}`);
+  console.log(`  ✅ Simulated risk analyzer output: Score ${consensus.riskAnalyzer.riskScore}/100`);
+  console.log(`  ✅ Simulated yield aggregator output: APY ${consensus.yieldAggregator.projectedYield}%`);
 
   return {
     ...state,
@@ -399,26 +399,26 @@ async function discoverOpportunity(state: WorkflowState): Promise<WorkflowState>
   return state;
 }
 
-// Step 5: prepare execution details for downstream action handling
+// Step 5: simulation-only settlement and execution placeholder handling
 async function executeWithPayment(state: WorkflowState): Promise<WorkflowState> {
-  console.log("💰 Preparing execution settlement details...");
+  console.log("💰 Preparing simulated settlement details...");
 
   const { consensus, intent } = state;
 
-  // Local placeholder settlement calculation used by the simulation path
+  // Synthetic settlement amount used only by the local simulation path
   const paymentAmount = calculateExecutionFee(intent.amount);
 
-  // Build a local receipt for simulated settlement handling
+  // Build a synthetic receipt for the simulation path
   const escrowReceipt = await lockPaymentEscrow({
     amount: paymentAmount,
     beneficiary: consensus!.routeOptimizer.recommendedPool,
     condition: "liquidity-deployment-success"
   });
 
-  console.log(`  💵 Payment locked: ${paymentAmount} wei`);
-  console.log(`  📄 Escrow: ${escrowReceipt.id}`);
+  console.log(`  💵 Simulated settlement amount: ${paymentAmount} wei`);
+  console.log(`  📄 Simulated settlement receipt: ${escrowReceipt.id}`);
 
-  // Execute liquidity deployment
+  // Produce a synthetic execution reference for downstream simulation steps
   const executionHash = await executeLiquidityDeployment({
     pool: consensus!.routeOptimizer.recommendedPool,
     tokenA: intent.tokenA,
@@ -427,7 +427,7 @@ async function executeWithPayment(state: WorkflowState): Promise<WorkflowState> 
     escrowId: escrowReceipt.id
   });
 
-  console.log(`  ✅ Execution: ${executionHash}`);
+  console.log(`  ✅ Simulated execution reference: ${executionHash}`);
 
   return {
     ...state,
@@ -436,23 +436,23 @@ async function executeWithPayment(state: WorkflowState): Promise<WorkflowState> 
   };
 }
 
-// Step 6: Monitor & Rebalance + On-Chain Action Dispatch
+// Step 6: simulation-only monitoring plus action payload emission
 async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
-  console.log("📊 Monitoring position...");
+  console.log("📊 Monitoring simulated position state...");
 
   const { executionHash } = state;
 
   const receipt = await waitForConfirmation(executionHash!);
   const positionId = receipt.logs[0].topics[1];
 
-  console.log(`  ✅ Position created: ${positionId}`);
+  console.log(`  ✅ Simulated position id: ${positionId}`);
 
   await scheduleRebalanceCheck(positionId, {
     interval: 3600,
     threshold: 5
   });
 
-  console.log(`  📅 Rebalancing scheduled every hour (5% threshold)`);
+  console.log(`  📅 Simulated rebalance schedule created (every hour, 5% threshold)`);
 
   // ─── Emit the CRE → Hook rebalance action payload ───────────────────────
   if (state.hookAction) {
@@ -496,9 +496,10 @@ interface Config {
   httpTrigger?: { path: string; method: string };
 }
 
-// Cron-triggered liquidity workflow (Runner pattern)
+// Cron-triggered development/test workflow path.
+// This is the current simulation-oriented handler, not the final operator-facing architecture.
 const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> => {
-  // Default demo intent for cron-triggered runs
+  // Default demo intent for cron-triggered development/test runs
   const intent: LiquidityIntent = {
     action: "deposit",
     tokenA: "WETH",
@@ -543,10 +544,11 @@ async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowSt
   return state;
 }
 
-// Helper functions (would be implemented with actual services)
+// Simulation-only helper functions below return synthetic values.
+// They are placeholders for local evaluation and are not live integrations.
 async function callRouteOptimizer(_intent: LiquidityIntent) {
   void _intent;
-  // In production: HTTP call to route-optimizer agent
+  // Synthetic route optimizer output for local-only evaluation
   return {
     recommendedPool: `0x${Array(40).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join("")}`,
     expectedApy: 12.5 + Math.random() * 10,
@@ -556,7 +558,7 @@ async function callRouteOptimizer(_intent: LiquidityIntent) {
 
 async function callRiskAnalyzer(_intent: LiquidityIntent) {
   void _intent;
-  // In production: HTTP call to risk-analyzer agent
+  // Synthetic risk analyzer output for local-only evaluation
   return {
     riskScore: 25 + Math.floor(Math.random() * 40),
     volatilityIndex: Math.random() * 50,
@@ -565,7 +567,7 @@ async function callRiskAnalyzer(_intent: LiquidityIntent) {
 }
 
 async function callYieldAggregator(_intent: LiquidityIntent) {
-  // In production: HTTP call to yield-aggregator agent
+  // Synthetic yield aggregator output for local-only evaluation
   return {
     optimalAllocation: {
       [_intent.tokenA]: 0.5,
@@ -577,13 +579,13 @@ async function callYieldAggregator(_intent: LiquidityIntent) {
 
 async function fetchPoolTVL(_pool: string): Promise<number> {
   void _pool;
-  // In production: Subgraph or RPC call
+  // Synthetic TVL sample for local-only evaluation
   return 1000000 + Math.floor(Math.random() * 5000000);
 }
 
 async function fetchPoolVolume(_pool: string): Promise<number> {
   void _pool;
-  // In production: Subgraph or RPC call
+  // Synthetic volume sample for local-only evaluation
   return 50000 + Math.floor(Math.random() * 500000);
 }
 
@@ -599,8 +601,8 @@ interface EscrowConfig {
 }
 
 async function lockPaymentEscrow(config: EscrowConfig) {
-  // Placeholder for any future settlement integration.
-  console.log(`  🔒 Locking payment escrow: ${config.condition}`);
+  // Synthetic settlement receipt generator used only by the simulation path.
+  console.log(`  🔒 Creating simulated settlement receipt: ${config.condition}`);
   return {
     id: `escrow-${Date.now()}`,
     amount: config.amount,
@@ -617,8 +619,8 @@ interface DeploymentConfig {
 }
 
 async function executeLiquidityDeployment(config: DeploymentConfig): Promise<string> {
-  // Placeholder deployment flow used by local workflow simulation.
-  console.log(`  🚀 Deploying liquidity to pool ${config.pool.slice(0, 10)}...`);
+  // Synthetic execution reference generator used only by local workflow simulation.
+  console.log(`  🚀 Simulating liquidity deployment to pool ${config.pool.slice(0, 10)}...`);
   return `0x${Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join("")}`;
 }
 
@@ -631,7 +633,7 @@ interface TransactionReceipt {
 
 async function waitForConfirmation(_hash: string): Promise<TransactionReceipt> {
   void _hash;
-  // In production: Poll for transaction receipt (CRE WASM has no setTimeout)
+  // Synthetic confirmation used only by the local simulation path.
   return {
     status: true,
     logs: [{
@@ -647,7 +649,7 @@ interface RebalanceConfig {
 
 async function scheduleRebalanceCheck(_positionId: string, config: RebalanceConfig) {
   void _positionId;
-  // In production: Chainlink Automation integration
-  console.log(`  ⏰ Rebalancing scheduled (interval: ${config.interval}s, threshold: ${config.threshold}%)`);
+  // Placeholder scheduling log for local-only workflow evaluation.
+  console.log(`  ⏰ Simulated rebalance schedule (interval: ${config.interval}s, threshold: ${config.threshold}%)`);
 }
 
