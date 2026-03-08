@@ -2,33 +2,92 @@
 
 import React, { useRef, useState } from 'react';
 import IntentExecutionStatus from '@/components/IntentExecutionStatus';
+import type {
+  IntentExecutionError,
+  IntentExecutionSuccess,
+  IntentWorkflowResult,
+  PreparedFeeAction,
+  PreparedHookAction,
+} from '@/components/IntentExecutionStatus';
 
-interface IntentWorkflowWarning {
-  code: string;
-  message: string;
-}
-
-interface IntentWorkflowResult {
-  status: string;
-  warnings?: IntentWorkflowWarning[];
-  [key: string]: unknown;
-}
-
-interface IntentRouteSuccessResponse {
+interface IntentRouteSuccessResponse extends IntentExecutionSuccess {
   ok: true;
-  intent: Record<string, unknown>;
-  workflow: IntentWorkflowResult;
 }
 
 interface IntentRouteErrorResponse {
   ok: false;
-  error: {
-    code: string;
-    message: string;
-  };
+  error: IntentExecutionError;
 }
 
-type IntentRouteResponse = IntentRouteSuccessResponse | IntentRouteErrorResponse;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isIntentExecutionError(value: unknown): value is IntentExecutionError {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+function isIntentWorkflowWarning(value: unknown): value is IntentWorkflowResult['warnings'][number] {
+  return (
+    isRecord(value) &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string'
+  );
+}
+
+function isPreparedHookAction(value: unknown): value is PreparedHookAction {
+  return (
+    isRecord(value) &&
+    typeof value.actionId === 'string' &&
+    typeof value.coordinator === 'string' &&
+    typeof value.coordinatorCalldata === 'string' &&
+    typeof value.tickLower === 'number' &&
+    typeof value.tickUpper === 'number'
+  );
+}
+
+function isPreparedFeeAction(value: unknown): value is PreparedFeeAction {
+  return (
+    isRecord(value) &&
+    typeof value.actionId === 'string' &&
+    typeof value.coordinator === 'string' &&
+    typeof value.coordinatorCalldata === 'string' &&
+    typeof value.newFee === 'number' &&
+    typeof value.volatility === 'number'
+  );
+}
+
+function isIntentWorkflowResult(value: unknown): value is IntentWorkflowResult {
+  return (
+    isRecord(value) &&
+    value.status === 'prepared' &&
+    isPreparedHookAction(value.hookAction) &&
+    (value.feeAction === undefined || isPreparedFeeAction(value.feeAction)) &&
+    (value.warnings === undefined ||
+      (Array.isArray(value.warnings) && value.warnings.every(isIntentWorkflowWarning)))
+  );
+}
+
+function isIntentRouteSuccessResponse(value: unknown): value is IntentRouteSuccessResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    isRecord(value.intent) &&
+    isIntentWorkflowResult(value.workflow)
+  );
+}
+
+function isIntentRouteErrorResponse(value: unknown): value is IntentRouteErrorResponse {
+  return (
+    isRecord(value) &&
+    value.ok === false &&
+    isIntentExecutionError(value.error)
+  );
+}
 
 export default function IntentForm() {
   const [intent, setIntent] = useState('');
@@ -89,10 +148,10 @@ export default function IntentForm() {
       return;
     }
 
-    let body: IntentRouteResponse;
+    let body: unknown;
 
     try {
-      body = (await response.json()) as IntentRouteResponse;
+      body = await response.json();
     } catch {
       if (requestId !== latestRequestIdRef.current) {
         return;
@@ -110,11 +169,26 @@ export default function IntentForm() {
       return;
     }
 
-    if (!response.ok || !body.ok) {
-      const routeError = body.ok
+    if (isIntentRouteSuccessResponse(body)) {
+      if (!response.ok) {
+        setError({
+          code: 'RESPONSE_SHAPE_ERROR',
+          message: 'Intent route returned an unexpected response shape.',
+        });
+        setStatus('error');
+        return;
+      }
+
+      setResult(body);
+      setStatus('success');
+      return;
+    }
+
+    if (isIntentRouteErrorResponse(body)) {
+      const routeError = response.ok
         ? {
-            code: 'INTERNAL_ERROR',
-            message: 'Intent workflow preparation failed.',
+            code: 'RESPONSE_SHAPE_ERROR',
+            message: 'Intent route returned an unexpected response shape.',
           }
         : body.error;
       setError(routeError);
@@ -122,8 +196,11 @@ export default function IntentForm() {
       return;
     }
 
-    setResult(body);
-    setStatus('success');
+    setError({
+      code: 'RESPONSE_SHAPE_ERROR',
+      message: 'Intent route returned an unexpected response shape.',
+    });
+    setStatus('error');
   };
 
   const handleReset = () => {

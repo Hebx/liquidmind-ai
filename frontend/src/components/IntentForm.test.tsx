@@ -188,6 +188,17 @@ test("submits the raw intent, shows pending state, and renders prepared workflow
     view.getAllByText(/volatility analysis unavailable\. fee update action was not prepared\./i).length >= 1,
   );
   assert.ok(view.getByText(/no on-chain transaction is submitted from this ui/i));
+  assert.ok(view.getByText(/prepared action metadata/i));
+  assert.ok(view.getByText(/hook action id/i));
+  assert.ok(
+    view.getAllByText(/0x1000000000000000000000000000000000000000000000000000000000000000/i).length >= 1,
+  );
+  assert.ok(view.getByText(/^coordinator$/i));
+  assert.ok(
+    view.getAllByText(/0x268c2e3d23f5cddaa0d0b40142053414cc05991b/i).length >= 1,
+  );
+  assert.ok(view.getByText(/tick range/i));
+  assert.ok(view.getByText(/-77220 → -74820/i));
   assert.ok(view.getAllByText(/"riskTolerance": "medium"/i).length >= 1);
   assert.ok(view.getByText(/"tickLower": -77220/i));
 });
@@ -332,4 +343,52 @@ test("shows a response parse error when the server replies with unreadable JSON"
   assert.ok(view.getByText(/response_parse_error/i));
   assert.ok(view.getByText(/intent route returned an unreadable response\./i));
   assert.equal(view.queryByText(/before the server returned a response/i), null);
+});
+
+test("shows a response shape error when the server returns valid JSON without required prepared fields", async (t) => {
+  const teardownDom = installDom();
+  t.after(teardownDom);
+
+  const previousFetch = global.fetch;
+  global.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        ok: true,
+        intent: {
+          action: "rebalance",
+        },
+        workflow: {
+          status: "prepared",
+          hookAction: {
+            actionId: "0x1".padEnd(66, "0"),
+          },
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      },
+    )) as typeof fetch;
+
+  t.after(() => {
+    global.fetch = previousFetch;
+  });
+
+  const view = render(<IntentForm />);
+
+  const user = userEvent.setup({
+    document: globalThis.document,
+  });
+  await user.type(view.getByRole("textbox"), "rebalance weth/usdc");
+  await user.click(view.getByRole("button", { name: /prepare http intent/i }));
+
+  await waitFor(() => {
+    assert.ok(view.getByText(/preparation failed/i));
+  });
+
+  assert.ok(view.getByText(/response_shape_error/i));
+  assert.ok(view.getByText(/intent route returned an unexpected response shape\./i));
+  assert.equal(view.queryByText(/prepared action metadata/i), null);
 });

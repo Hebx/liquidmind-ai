@@ -1,22 +1,40 @@
 'use client';
 
-interface IntentWorkflowWarning {
+export interface IntentWorkflowWarning {
   code: string;
   message: string;
 }
 
-interface IntentWorkflowResult {
-  status: string;
+export interface PreparedHookAction {
+  actionId: string;
+  coordinator: string;
+  coordinatorCalldata: string;
+  tickLower: number;
+  tickUpper: number;
+}
+
+export interface PreparedFeeAction {
+  actionId: string;
+  coordinator: string;
+  coordinatorCalldata: string;
+  newFee: number;
+  volatility: number;
+}
+
+export interface IntentWorkflowResult {
+  status: 'prepared';
+  hookAction: PreparedHookAction;
+  feeAction?: PreparedFeeAction;
   warnings?: IntentWorkflowWarning[];
   [key: string]: unknown;
 }
 
-interface IntentExecutionSuccess {
+export interface IntentExecutionSuccess {
   intent: Record<string, unknown>;
   workflow: IntentWorkflowResult;
 }
 
-interface IntentExecutionError {
+export interface IntentExecutionError {
   code: string;
   message: string;
 }
@@ -40,6 +58,21 @@ function JsonPanel({
       <pre className="overflow-x-auto text-xs font-mono text-text-primary whitespace-pre-wrap break-all">
         {JSON.stringify(value, null, 2)}
       </pre>
+    </div>
+  );
+}
+
+function MetadataRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-[var(--border-thin)] border-border p-3">
+      <div className="text-[10px] font-mono text-text-secondary">{label}</div>
+      <div className="text-xs font-mono text-text-primary text-right break-all">{value}</div>
     </div>
   );
 }
@@ -106,6 +139,29 @@ export default function IntentExecutionStatus({
             </div>
           </div>
         )}
+
+        <div className="border-[var(--border-thin)] border-lime/40 bg-bg-primary/70 p-4">
+          <div className="text-[10px] font-mono text-text-secondary mb-2">PREPARED ACTION METADATA</div>
+          <div className="space-y-2">
+            <MetadataRow label="HOOK ACTION ID" value={result.workflow.hookAction.actionId} />
+            <MetadataRow label="COORDINATOR" value={result.workflow.hookAction.coordinator} />
+            <MetadataRow
+              label="COORDINATOR CALLDATA"
+              value={result.workflow.hookAction.coordinatorCalldata}
+            />
+            <MetadataRow
+              label="TICK RANGE"
+              value={`${result.workflow.hookAction.tickLower} → ${result.workflow.hookAction.tickUpper}`}
+            />
+            {result.workflow.feeAction && (
+              <>
+                <MetadataRow label="FEE ACTION ID" value={result.workflow.feeAction.actionId} />
+                <MetadataRow label="NEW FEE" value={`${result.workflow.feeAction.newFee}`} />
+                <MetadataRow label="VOLATILITY" value={`${result.workflow.feeAction.volatility}`} />
+              </>
+            )}
+          </div>
+        </div>
 
         <JsonPanel label="PARSED CANONICAL INTENT" value={result.intent} />
         <JsonPanel label="PREPARED WORKFLOW OUTPUT" value={result.workflow} />
