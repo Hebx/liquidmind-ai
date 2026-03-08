@@ -122,6 +122,45 @@ test("handleIntentPost returns prepared canonical workflow output instead of onl
   assert.equal("feeAction" in body.workflow, false);
 });
 
+test("handleIntentPost returns an honest sanitized error when canonical workflow execution fails after parsing", async () => {
+  const parsedIntent = {
+    action: "rebalance" as const,
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: "1000000",
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium" as const,
+    minYield: 5,
+  };
+
+  const response = await handleIntentPost(
+    new Request("http://localhost/api/intent", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+      }),
+    }),
+    {
+      parseIntent: async () => parsedIntent,
+      executeWorkflow: async () => {
+        throw new Error("workflow boom");
+      },
+    },
+  );
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    error: {
+      code: "INTERNAL_ERROR",
+      message: "Intent workflow preparation failed.",
+    },
+  });
+});
+
 test("POST fails honestly when live canonical market data is unavailable", async () => {
   const previousEnv = {
     ...process.env,
@@ -180,7 +219,7 @@ test("POST fails honestly when live canonical market data is unavailable", async
       ok: false,
       error: {
         code: "INTERNAL_ERROR",
-        message: "Unexpected intent parsing failure.",
+        message: "Intent workflow preparation failed.",
       },
     });
   } finally {

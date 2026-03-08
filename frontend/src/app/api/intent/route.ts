@@ -27,10 +27,13 @@ export async function handleIntentPost(
   request: Request,
   dependencies: IntentRouteDependencies = DEFAULT_INTENT_ROUTE_DEPENDENCIES,
 ) {
+  let parsedIntentSuccessfully = false;
+
   try {
     const body = await request.json();
     const rawIntent = parseIntentRequestBody(body);
     const intent = await dependencies.parseIntent(rawIntent);
+    parsedIntentSuccessfully = true;
     const workflow = await dependencies.executeWorkflow(intent);
 
     return NextResponse.json({
@@ -65,7 +68,9 @@ export async function handleIntentPost(
         ok: false,
         error: {
           code: "INTERNAL_ERROR",
-          message: "Unexpected intent parsing failure.",
+          message: parsedIntentSuccessfully
+            ? "Intent workflow preparation failed."
+            : "Unexpected intent parsing failure.",
         },
       },
       {
