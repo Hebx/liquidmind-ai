@@ -1,7 +1,8 @@
 #!/bin/bash
 # LIQUIDMIND E2E Testnet Suite
 #
-# Runs every check against REAL Base Sepolia state — zero mocks:
+# Runs the live-read and contract-wiring checks against REAL Base Sepolia state.
+# Full submission proof only happens when AGENT_PRIVATE_KEY is set.
 #   1. Chainlink price feeds  (latestRoundData via cast)
 #   2. Deployed contracts     (coordinator / hook / pool-manager wiring)
 #   3. LINK balance           (coordinator treasury)
@@ -34,6 +35,7 @@ GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'
 RED='\033[0;31m'; CYAN='\033[0;36m'; NC='\033[0m'
 
 PASS=0; FAIL=0
+SUBMISSION_SKIPPED=0
 
 pass() { echo -e "  ${GREEN}✅ $1${NC}"; PASS=$((PASS + 1)); }
 fail() { echo -e "  ${RED}❌ $1${NC}"; FAIL=$((FAIL + 1)); }
@@ -51,7 +53,7 @@ chainlink_price() {
 }
 
 divider
-echo -e "${BLUE}🚀  LIQUIDMIND E2E — BASE SEPOLIA TESTNET  (no mocks)${NC}"
+echo -e "${BLUE}🚀  LIQUIDMIND E2E — BASE SEPOLIA TESTNET${NC}"
 divider
 
 # ── STEP 1: Chainlink price feeds ──────────────────────────────────────────────
@@ -251,6 +253,7 @@ else
   else
     echo -e "  ${YELLOW}AGENT_PRIVATE_KEY not set — skipping on-chain submission${NC}"
     echo -e "  ${CYAN}To close the loop, export AGENT_PRIVATE_KEY and re-run${NC}"
+    SUBMISSION_SKIPPED=1
     pass "Hook action calldata computed from live Chainlink price (on-chain step skipped: no AGENT_PRIVATE_KEY)"
   fi
 fi
@@ -332,6 +335,7 @@ else
     fi
   else
     echo -e "  ${YELLOW}AGENT_PRIVATE_KEY not set — skipping on-chain fee update${NC}"
+    SUBMISSION_SKIPPED=1
     pass "Dynamic fee calldata computed from live volatility (on-chain step skipped: no AGENT_PRIVATE_KEY)"
   fi
 fi
@@ -350,6 +354,10 @@ if [ "$FAIL" -gt 0 ]; then
 else
   echo -e "  ${RED}Failed: 0${NC}"
   divider
-  echo -e "${GREEN}✅  ALL E2E CHECKS PASSED — BASE SEPOLIA — NO MOCKS${NC}"
+  if [ "$SUBMISSION_SKIPPED" -eq 1 ]; then
+    echo -e "${YELLOW}✅  LIVE-READ CHECKS PASSED — PARTIAL EVIDENCE ONLY (submission skipped without AGENT_PRIVATE_KEY)${NC}"
+  else
+    echo -e "${GREEN}✅  ALL E2E CHECKS PASSED — FULL SUBMISSION EVIDENCE${NC}"
+  fi
   divider
 fi

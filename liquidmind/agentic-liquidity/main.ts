@@ -506,9 +506,10 @@ interface Config {
 // Cron-triggered canonical workflow path.
 // Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
 const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> => {
-  // Default demo intent for cron-triggered development/test runs
+  // Default demo intent for cron-triggered development/test runs.
+  // Keep this aligned with the current canonical scope: rebalance/updateFee payload prep.
   const intent: LiquidityIntent = {
-    action: "deposit",
+    action: "rebalance",
     tokenA: "WETH",
     tokenB: "USDC",
     amount: 1000000n,

@@ -11,6 +11,7 @@
  *
  * Falls back to hardcoded mock prices only when runtime is unavailable
  * (e.g. local unit tests outside the CRE simulator).
+ * When runtime is present, failures must surface so the canonical path fails closed.
  */
 
 import {
@@ -80,7 +81,8 @@ export class PriceFeedUtil {
    * Base Sepolia via the EVMClient capability — real on-chain data.
    *
    * When `runtime` is omitted it falls back to hardcoded mock prices so the
-   * class remains usable in plain unit tests.
+   * class remains usable in plain unit tests. When `runtime` is present,
+   * Chainlink read failures are surfaced instead of falling back to mock data.
    */
   async getPrice(tokenAddressOrSymbol: string, runtime?: Runtime<unknown>): Promise<number> {
     const symbol = this.resolveSymbol(tokenAddressOrSymbol);
@@ -101,7 +103,7 @@ export class PriceFeedUtil {
         return price;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.log(`  ⚠️  Chainlink EVMClient failed for ${symbol}: ${msg} — falling back to mock`);
+        throw new Error(`Chainlink EVMClient failed for ${symbol}: ${msg}`);
       }
     }
 
