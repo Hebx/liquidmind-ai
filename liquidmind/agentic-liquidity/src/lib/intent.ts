@@ -187,11 +187,7 @@ function normalizeAmount(value: unknown): bigint {
   }
 
   if (typeof value === "number") {
-    if (!Number.isInteger(value)) {
-      throw new Error("Invalid intent: amount must be an integer");
-    }
-
-    return normalizeAmount(String(value));
+    throw new Error("Invalid intent: amount must be provided as a base-unit integer string or bigint");
   }
 
   if (typeof value === "string") {
@@ -208,7 +204,7 @@ function normalizeAmount(value: unknown): bigint {
     return amount;
   }
 
-  throw new Error("Invalid intent: amount must be a bigint, number, or base-unit integer string");
+  throw new Error("Invalid intent: amount must be provided as a base-unit integer string or bigint");
 }
 
 function normalizePreferredChains(value: unknown): string[] {

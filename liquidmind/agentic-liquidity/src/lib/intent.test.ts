@@ -53,6 +53,21 @@ test("normalizeIntentInput rejects non-positive amounts", () => {
   );
 });
 
+test("normalizeIntentInput rejects unsafe numeric amount inputs", () => {
+  assert.throws(
+    () =>
+      normalizeIntentInput({
+        tokenA: "WETH",
+        tokenB: "USDC",
+        amount: Number.MAX_SAFE_INTEGER + 1,
+        preferredChains: ["base-sepolia"],
+        riskTolerance: "medium",
+        minYield: 5,
+      }),
+    /amount must be provided as a base-unit integer string or bigint/i,
+  );
+});
+
 test("normalizeIntentInput rejects unsupported canonical actions", () => {
   assert.throws(
     () =>
