@@ -17,6 +17,7 @@ contract AgenticLiquidityHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
 
     event DefenseStateTransitioned(PoolId indexed poolId, uint8 previousState, uint8 newState);
+    event RegimeChanged(PoolId indexed poolId, uint8 oldRegime, uint8 newRegime, uint256 ema);
 
     AgenticLiquidityHook public hook;
     MockERC20 public token0;
@@ -340,5 +341,170 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         bool success = hook.executeAgentAction(bytes32(uint256(3)), "setAgentOnly", encodedKey, actionData);
         assertTrue(success);
         assertTrue(hook.getPoolConfig(poolId).agentOnlyLPs);
+    }
+
+    // ============ Volatility Regime Tests ============
+
+    function test_Regime_DoesNotOscillateAtBoundary() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        _setVolatilityEmaTicks(poolId, 6);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 5);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 6);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 5);
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+    }
+
+    function test_Regime_RequiresQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 100);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            100_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+    }
+
+    function test_Regime_ThresholdPlusMarginTransitionsImmediately() public {
+        PoolId poolId = poolKey.toId();
+        _setVolatilityEmaTicks(poolId, 102);
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            102_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+    }
+
+    function test_Regime_ThresholdMinusMarginTransitionsImmediatelyOnLowSide() public {
+        PoolId poolId = poolKey.toId();
+        _setVolatilityEmaTicks(poolId, 3);
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW),
+            3_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+    }
+
+    function test_Regime_LowToNormalRequiresHysteresisExitQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        _setVolatilityEmaTicks(poolId, 7);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            7_000
+        );
+        _setVolatilityEmaTicks(poolId, 7);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+    }
+
+    function test_Regime_HighToNormalRequiresHysteresisExitQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 110);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 110);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+
+        _setVolatilityEmaTicks(poolId, 90);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            90_000
+        );
+        _setVolatilityEmaTicks(poolId, 90);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+    }
+
+    function _setVolatilityEmaTicks(PoolId poolId, uint256 avgTicks) internal {
+        uint256 scaled = avgTicks * 1_000;
+        bytes32 slot = keccak256(abi.encode(PoolId.unwrap(poolId), uint256(3)));
+        vm.store(address(hook), slot, bytes32(scaled));
     }
 }

@@ -65,6 +65,12 @@ contract AgenticLiquidityHook is BaseHook {
         DefenseState previousState,
         DefenseState newState
     );
+    event RegimeChanged(
+        PoolId indexed poolId,
+        VolatilityRegime oldRegime,
+        VolatilityRegime newRegime,
+        uint256 ema
+    );
 
     // ============ Structs ============
     struct PoolConfig {
@@ -90,6 +96,12 @@ contract AgenticLiquidityHook is BaseHook {
         RECOVERY
     }
 
+    enum VolatilityRegime {
+        LOW,
+        NORMAL,
+        HIGH
+    }
+
     // ============ EMA Constants ============
     // alpha = 10/100 = 10% (smoothed over ~10 swaps)
     // EMA stored as rawValue * EMA_PRECISION to preserve sub-integer precision
@@ -100,6 +112,10 @@ contract AgenticLiquidityHook is BaseHook {
     // Volatility thresholds (ticks per swap after dividing EMA by EMA_PRECISION)
     uint256 private constant VOL_LOW_TICKS  = 5;
     uint256 private constant VOL_HIGH_TICKS = 100;
+    uint256 private constant VOL_LOW_EXIT_TICKS  = 7;
+    uint256 private constant VOL_HIGH_EXIT_TICKS = 90;
+    uint256 private constant REGIME_MARGIN_TICKS = 2;
+    uint8   private constant REGIME_QUALIFYING_UPDATES = 2;
 
     // Default config values
     uint24 public constant DEFAULT_BASE_FEE = 3000;
@@ -122,6 +138,9 @@ contract AgenticLiquidityHook is BaseHook {
     address public agentCoordinator;
     mapping(PoolId => DefenseState) private poolDefenseStates;
     mapping(PoolId => bool) private poolInitialized;
+    mapping(PoolId => VolatilityRegime) private poolVolatilityRegimes;
+    mapping(PoolId => VolatilityRegime) private pendingVolatilityRegimes;
+    mapping(PoolId => uint8) private pendingVolatilityRegimeCounts;
 
     // ============ Modifiers ============
     modifier onlyOwner() {
@@ -176,6 +195,7 @@ contract AgenticLiquidityHook is BaseHook {
 
         poolInitialized[poolId] = true;
         poolDefenseStates[poolId] = DefenseState.NORMAL;
+        poolVolatilityRegimes[poolId] = VolatilityRegime.NORMAL;
 
         return this.afterInitialize.selector;
     }
@@ -232,6 +252,7 @@ contract AgenticLiquidityHook is BaseHook {
 
         // Update EMA with this swap's tick delta
         _updateVolatilityEMA(poolId, tick);
+        _refreshVolatilityRegime(poolId);
         currentTick[poolId] = tick;
 
         uint24 newFee = _calculateDynamicFee(poolId, poolConfigs[poolId]);
@@ -475,6 +496,11 @@ contract AgenticLiquidityHook is BaseHook {
         poolConfigs[poolId].agentOnlyLPs = enabled;
     }
 
+    function refreshVolatilityRegime(PoolId poolId) external onlyOwner {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        _refreshVolatilityRegime(poolId);
+    }
+
     function transitionDefenseState(PoolId poolId, DefenseState nextState) external onlyOwner {
         if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
 
@@ -518,8 +544,99 @@ contract AgenticLiquidityHook is BaseHook {
         return poolDefenseStates[poolId];
     }
 
+    function getVolatilityRegime(PoolId poolId) external view returns (VolatilityRegime) {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        return poolVolatilityRegimes[poolId];
+    }
+
     function _isPoolInitialized(PoolId poolId) internal view returns (bool) {
         return poolInitialized[poolId];
+    }
+
+    function _refreshVolatilityRegime(PoolId poolId) internal {
+        VolatilityRegime current = poolVolatilityRegimes[poolId];
+        uint256 avgTicks = volatilityEMA[poolId] / EMA_PRECISION;
+        VolatilityRegime target = _classifyVolatilityRegime(current, avgTicks);
+
+        if (target == current) {
+            pendingVolatilityRegimeCounts[poolId] = 0;
+            return;
+        }
+
+        if (_isMarginQualifiedTransition(current, target, avgTicks)) {
+            _commitVolatilityRegime(poolId, current, target);
+            return;
+        }
+
+        if (
+            pendingVolatilityRegimeCounts[poolId] > 0
+                && pendingVolatilityRegimes[poolId] == target
+        ) {
+            pendingVolatilityRegimeCounts[poolId]++;
+        } else {
+            pendingVolatilityRegimes[poolId] = target;
+            pendingVolatilityRegimeCounts[poolId] = 1;
+        }
+
+        if (pendingVolatilityRegimeCounts[poolId] >= REGIME_QUALIFYING_UPDATES) {
+            _commitVolatilityRegime(poolId, current, target);
+        }
+    }
+
+    function _classifyVolatilityRegime(VolatilityRegime current, uint256 avgTicks)
+        internal
+        pure
+        returns (VolatilityRegime)
+    {
+        if (current == VolatilityRegime.LOW) {
+            if (avgTicks >= VOL_LOW_EXIT_TICKS) return VolatilityRegime.NORMAL;
+            return VolatilityRegime.LOW;
+        }
+
+        if (current == VolatilityRegime.HIGH) {
+            if (avgTicks <= VOL_HIGH_EXIT_TICKS) return VolatilityRegime.NORMAL;
+            return VolatilityRegime.HIGH;
+        }
+
+        if (avgTicks <= VOL_LOW_TICKS) return VolatilityRegime.LOW;
+        if (avgTicks >= VOL_HIGH_TICKS) return VolatilityRegime.HIGH;
+        return VolatilityRegime.NORMAL;
+    }
+
+    function _isMarginQualifiedTransition(
+        VolatilityRegime current,
+        VolatilityRegime target,
+        uint256 avgTicks
+    ) internal pure returns (bool) {
+        if (current == VolatilityRegime.NORMAL && target == VolatilityRegime.LOW) {
+            uint256 lowImmediate = VOL_LOW_TICKS > REGIME_MARGIN_TICKS
+                ? VOL_LOW_TICKS - REGIME_MARGIN_TICKS
+                : 0;
+            return avgTicks <= lowImmediate;
+        }
+        if (current == VolatilityRegime.NORMAL && target == VolatilityRegime.HIGH) {
+            return avgTicks >= VOL_HIGH_TICKS + REGIME_MARGIN_TICKS;
+        }
+        if (current == VolatilityRegime.LOW && target == VolatilityRegime.NORMAL) {
+            return avgTicks >= VOL_LOW_EXIT_TICKS + REGIME_MARGIN_TICKS;
+        }
+        if (current == VolatilityRegime.HIGH && target == VolatilityRegime.NORMAL) {
+            uint256 highImmediate = VOL_HIGH_EXIT_TICKS > REGIME_MARGIN_TICKS
+                ? VOL_HIGH_EXIT_TICKS - REGIME_MARGIN_TICKS
+                : 0;
+            return avgTicks <= highImmediate;
+        }
+        return false;
+    }
+
+    function _commitVolatilityRegime(
+        PoolId poolId,
+        VolatilityRegime oldRegime,
+        VolatilityRegime newRegime
+    ) internal {
+        poolVolatilityRegimes[poolId] = newRegime;
+        pendingVolatilityRegimeCounts[poolId] = 0;
+        emit RegimeChanged(poolId, oldRegime, newRegime, volatilityEMA[poolId]);
     }
 
     function _isValidDefenseTransition(DefenseState currentState, DefenseState nextState)
