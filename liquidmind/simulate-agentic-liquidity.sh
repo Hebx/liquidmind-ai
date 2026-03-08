@@ -27,4 +27,9 @@ fi
 BASE_SEPOLIA_RPC="$BASE_SEPOLIA_RPC" envsubst '${BASE_SEPOLIA_RPC}' < "$BACKUP_FILE" > "$PROJECT_FILE"
 
 cd "$SCRIPT_DIR"
-cre workflow simulate agentic-liquidity -e "$ENV_FILE" -T "${CRE_TARGET:-staging-settings}" "$@"
+
+# The repo root `.env` still contains historical placeholder CRE variables.
+# Clear them so simulation uses the browser-authenticated session instead.
+unset CRE_API_KEY CRE_GATEWAY_URL CRE_WORKFLOW_ID CRE_ETH_PRIVATE_KEY PRIVATE_KEY
+
+cre workflow simulate agentic-liquidity -R "$SCRIPT_DIR" -e "$ENV_FILE" -T "${CRE_TARGET:-staging-settings}" "$@"
