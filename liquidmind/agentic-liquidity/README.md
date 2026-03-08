@@ -1,300 +1,107 @@
-# 🔄 LiquidMind CRE Workflow
+# LiquidMind CRE Workflow Package
 
-Chainlink CRE (Chainlink Runtime Environment) workflow for autonomous liquidity management using A2A agents and x402 micropayments.
+Canonical CRE package for the current milestone.
 
-## 📋 Overview
+This directory, `liquidmind/agentic-liquidity`, is the active workflow path for LiquidMind. It is the package used to validate real Chainlink reads, compute liquidity management actions, and prepare the next HTTP-triggered intent milestone.
 
-This workflow implements a 6-step autonomous liquidity management system:
+## Milestone Status
 
-1. **Intent Analysis** - Parse and validate user liquidity intent
-2. **Agent Coordination** - A2A consensus from Route Optimizer, Risk Analyzer, and Yield Aggregator
-3. **Risk Assessment** - Validate against user risk tolerance
-4. **Opportunity Discovery** - Find optimal pools and yields
-5. **Execution via x402** - Lock payments in escrow and execute cross-chain
-6. **Monitoring & Rebalancing** - Automated position monitoring
+### Live Today
 
-## 🚀 Quick Start
+- Real Chainlink price reads are implemented through `src/utils/price-feed.ts`.
+- Historical round reads for volatility are implemented and used for fee selection.
+- The workflow computes `rebalance` and `updateFee` action payloads for the deployed Base Sepolia contracts.
+- Base Sepolia contract execution is validated elsewhere in the repo through the coordinator and hook flows.
 
-### Prerequisites
+### Current Dev/Test Flow
 
-- Node.js 18+
-- npm or yarn
-- Git
+- Local development and testing use this package directly.
+- `npm run simulate` is the current package-level validation path.
+- `npm run cre-compile` is available when you want to compile the workflow entrypoint for CRE-oriented validation.
+- Cron-style scheduling is part of the current simulation and configuration path for development, not the final operator-facing architecture.
 
-### Installation
+### Next Milestone
+
+- Accept HTTP-triggered intent payloads into the workflow.
+- Make intent ingestion the primary operator-facing entrypoint.
+- Carry validated intents through to coordinator execution on Base Sepolia.
+
+### Deferred
+
+- Real A2A orchestration is not part of the current live path.
+- `x402` payment flows are not part of the current live path.
+- Production cross-chain automation is not part of the current live path unless separately proven.
+
+## Quick Start
+
+### Install
 
 ```bash
-cd cre-workflow
+cd liquidmind/agentic-liquidity
 npm install
 ```
 
-### Configuration
-
-Copy the environment template and fill in your credentials:
+### Simulate Current Workflow Logic
 
 ```bash
-cp .env.example .env
-# Edit .env with your actual values
-```
-
-Key required variables:
-- `CRE_API_KEY` - From Chainlink CRE dashboard
-- `CRE_GATEWAY_URL` - From CRE Gateway endpoints
-- `CRE_WORKFLOW_ID` - From CRE dashboard after deploy
-- `PRIVATE_KEY` - Dedicated workflow wallet (keep secure!)
-- `BASE_SEPOLIA_RPC` - RPC endpoint
-- `X402_FACILITATOR_URL` - x402 facilitator
-- `AGENT_TREASURY_ADDRESS` - Treasury wallet
-
-## 🛠️ Usage
-
-### Build
-
-```bash
-npm run build
-```
-
-### Run Workflow (Production)
-
-```bash
-npm run dev
-```
-
-### CRE CLI (latest)
-```bash
-# login
-cre login
-
-# deploy workflow
-cre workflows deploy dist/agentic-liquidity.js
-
-# list workflows (get CRE_WORKFLOW_ID)
-cre workflows list
-```
-
-### Run Mock Simulation (Testing)
-
-```bash
+cd liquidmind/agentic-liquidity
 npm run simulate
 ```
 
-## 📁 Project Structure
+Use this to validate the current development flow and inspect computed outputs locally.
 
-```
-cre-workflow/
-├── src/
-│   ├── agentic-liquidity.ts    # Main CRE workflow
-│   ├── mock-workflow.ts        # Local testing simulation
-│   └── utils/
-│       └── price-feed.ts       # Price feed utilities
-├── dist/                       # Compiled TypeScript
-├── .env.example                # Environment template
-├── package.json                # Dependencies
-├── tsconfig.json               # TypeScript config
-└── README.md                   # This file
-```
-
-## 🧪 Testing
-
-### Unit Tests
+### Compile the Workflow Entry Point
 
 ```bash
-npm test
+cd liquidmind/agentic-liquidity
+npm run cre-compile
 ```
 
-### Integration Testing
+This compiles `main.ts` to a CRE workflow artifact for further validation.
 
-Run the mock workflow to simulate all 6 steps without real transactions:
+## Current Workflow Shape
 
-```bash
-npm run simulate
+The current package focuses on:
+
+1. Reading live ETH/USD data from Chainlink.
+2. Reading historical feed rounds to compute volatility.
+3. Mapping volatility and risk settings into fee and tick guidance.
+4. Producing action payloads for coordinator-driven `rebalance` and `updateFee` execution.
+
+The package should not be read as evidence that A2A or `x402` execution is already part of the live milestone.
+
+## Package Structure
+
+```text
+liquidmind/agentic-liquidity/
+|- main.ts                     # CRE workflow entrypoint
+|- workflow.yaml               # CRE workflow config
+|- config.staging.json         # Current dev/test trigger config
+|- config.production.json      # Production-oriented config scaffold
+|- src/utils/price-feed.ts     # Chainlink price and volatility reads
+|- src/mock-workflow.ts        # Local simulation flow
+`- package.json                # Package scripts and dependencies
 ```
 
-Expected output:
-```
-🚀 Starting LiquidMind CRE Workflow
-==================================================
-Step 1: Intent Analysis
-  Token A Price: $3200.50
-  Token B Price: $1.00
-  Action: deposit
-  Risk Tolerance: medium
-Step 2: Agent Coordination
-  ✅ Route Optimizer: Pool 0x7a3b...e9f2
-  ✅ Risk Analyzer: Score 45/100
-  ✅ Yield Aggregator: APY 15.3%
-...
-✅ Workflow completed successfully!
-Position ID: pos-1699999999999
-```
+## Configuration Notes
 
-## 🔗 Integration Guide
+- `workflow.yaml` points CRE builds at `main.ts`.
+- `config.staging.json` currently supports the development/test trigger configuration.
+- The repo includes HTTP-trigger configuration scaffolding, but the operator-facing HTTP intent flow is still the next milestone rather than a completed live path.
 
-### Registering the Workflow
+## Validation Guidance
 
-1. Go to [Chainlink CRE Dashboard](https://cre.chain.link)
-2. Create new workflow
-3. Upload `dist/agentic-liquidity.js`
-4. Configure environment variables
-5. Deploy to testnet
+- Use `npm run simulate` for package-level validation.
+- Use the repo-level deployment and status docs for live Base Sepolia contract evidence.
+- Treat `cre-workflow/` as legacy material if you encounter it elsewhere in the repo.
 
-### A2A Agent Setup
-
-Ensure your agent services are running:
-
-```bash
-# Route Optimizer (port 3001)
-cd ../agents && npm run route-optimizer
-
-# Risk Analyzer (port 3002)
-cd ../agents && npm run risk-analyzer
-
-# Yield Aggregator (port 3003)
-cd ../agents && npm run yield-aggregator
-```
-
-### x402 Payment Integration
-
-The workflow uses x402 for payment escrow:
-
-1. Configure `X402_GATEWAY_URL` in `.env`
-2. Set `PAYMENT_RECEIVER` to your treasury address
-3. The workflow automatically locks payments before execution
-
-## 📊 Workflow Steps
-
-### 1. Intent Analysis
-```typescript
-interface LiquidityIntent {
-  action: "deposit" | "withdraw" | "rebalance";
-  tokenA: string;
-  tokenB: string;
-  amount: bigint;
-  preferredChains: string[];
-  riskTolerance: "low" | "medium" | "high";
-  minYield: number;
-}
-```
-
-### 2. Agent Coordination
-Coordinates with 3 A2A agents:
-- **Route Optimizer**: Finds optimal pool and route
-- **Risk Analyzer**: Evaluates risk metrics
-- **Yield Aggregator**: Projects yield and allocation
-
-### 3. Risk Assessment
-Validates against user-defined risk tolerance:
-- Low: Max risk score 30
-- Medium: Max risk score 60
-- High: Max risk score 85
-
-### 4. Opportunity Discovery
-Fetches real-time pool data:
-- TVL
-- 24h Volume
-- Expected APY
-
-### 5. Execution via x402
-1. Lock payment in x402 escrow
-2. Execute via CCIP for cross-chain
-3. Deploy to Uniswap v4 hook
-
-### 6. Monitoring & Rebalancing
-- Chainlink Automation integration
-- Rebalance triggered at 5% drift threshold
-- Hourly checks by default
-
-## 🔧 Configuration Options
-
-### Price Feed Sources
-
-Priority order:
-1. Chainlink Price Feeds (primary)
-2. CoinGecko API (fallback)
-3. Mock prices (development)
-
-Set `USE_MOCK_PRICES=true` in `.env` for local testing.
-
-### Retry Logic
-
-Default configuration:
-- Max retries: 3
-- Retry delay: 5 seconds
-- Timeout: 5 minutes
-
-### Supported Tokens
-
-Currently supported:
-- WETH, WBTC
-- USDC, USDT, DAI
-- LINK, UNI
-
-Add new tokens to `src/utils/price-feed.ts`.
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**"Cannot find module '@chainlink/cre-sdk'"**
-```bash
-npm install
-```
-
-**"CRE_API_KEY is required"**
-- Ensure `.env` file exists
-- Check that `CRE_API_KEY` is set
-
-**"Price feed timeout"**
-- Check internet connection
-- Verify CoinGecko API key if using pro features
-
-**"Transaction failed"**
-- Ensure wallet has sufficient ETH for gas
-- Check that `SIMULATION_MODE=false` for real transactions
-
-### Debug Mode
-
-Enable debug logging:
-```bash
-LOG_LEVEL=debug npm run dev
-```
-
-## 🔐 Security
-
-### Wallet Security
-- Use a dedicated workflow wallet (not your main wallet)
-- Keep `PRIVATE_KEY` in `.env` only, never commit
-- Limit wallet funds to operational minimum
-- Use a hardware wallet for production
-
-### API Keys
-- Rotate API keys regularly
-- Use separate keys for dev/staging/prod
-- Monitor API usage for anomalies
-
-### Smart Contract
-- All contracts are audited before production use
-- Workflow includes circuit breakers for emergency stops
-
-## 📚 Additional Resources
+## Resources
 
 - [Chainlink CRE Docs](https://docs.chain.link/cre)
-- [x402 Protocol](https://x402.org)
-- [A2A Protocol](https://a2a.org)
-- [LiquidMind Smart Contracts](../contracts/README.md)
+- [Root README](../../README.md)
+- [Deployment Guide](../../docs/DEPLOYMENT.md)
+- [Deployment Status](../../docs/DEPLOYMENT_STATUS.md)
 
-## 🤝 Contributing
+## License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `npm test`
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see [LICENSE](../LICENSE) for details.
-
----
-
-Built with 🧠 by **LiquidMind** for Chainlink Convergence 2026
+MIT License - see [LICENSE](../../LICENSE).
