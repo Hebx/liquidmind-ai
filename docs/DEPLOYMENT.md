@@ -82,10 +82,10 @@ This deploys `LiquidMindCoordinator` and `AgenticLiquidityHook`, wires them toge
 ```bash
 cd liquidmind/agentic-liquidity
 npm install
-npm run simulate
+npm run validate:real
 ```
 
-Use this package to validate the current workflow logic and real Chainlink feed reads.
+Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still compiles for CRE execution.
 
 If you need a compiled workflow artifact, run:
 
@@ -97,8 +97,10 @@ npm run cre-compile
 If you want the root-script equivalent, you can also run:
 
 ```bash
-npm run simulate:cre
+npm run validate:cre
 ```
+
+`npm run simulate:mock` remains available only for the legacy local-demo flow and should not be used as the primary validation command for the live milestone path.
 
 ### Existing end-to-end script
 
@@ -107,7 +109,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. This is the current milestone evidence path: contract wiring, simulated CRE output, and on-chain rebalance or fee update execution.
+`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. With that variable set, `e2e-live.sh` can prove the current submission bridge for rebalance or `updateFee` actions. Without it, the script is only partial evidence and does not prove on-chain submission.
 
 ## Next Milestone
 

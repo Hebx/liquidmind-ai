@@ -47,13 +47,16 @@ liquidmind/agentic-liquidity
   `- Emit rebalance/updateFee action payloads
                     |
                     v
+  Operator/test bridge submits payloads
+                    |
+                    v
         LiquidMindCoordinator (Base Sepolia)
                     |
                     v
          AgenticLiquidityHook (Uniswap v4)
 ```
 
-The current source of truth for the CRE side of the project is `liquidmind/agentic-liquidity`. The older `cre-workflow/` directory may still exist in the repo as legacy material, but it is not the active implementation target for this milestone.
+The current source of truth for the CRE side of the project is `liquidmind/agentic-liquidity`. Today, that package emits action payloads and real Chainlink-derived outputs; the actual submission bridge and on-chain evidence path still live in external operator/test flows such as `e2e-live.sh`, not inside the canonical package itself. The older `cre-workflow/` directory may still exist in the repo as legacy material, but it is not the active implementation target for this milestone.
 
 ---
 
@@ -114,7 +117,7 @@ npm run validate:real
 
 This is the canonical package-level validation path for the real CRE workflow entrypoint. It compiles `main.ts` to a CRE workflow artifact.
 
-If you need the direct equivalent, `npm run cre-compile` performs the same real-workflow validation step.
+If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package command, `npm run cre-compile` performs the same real-workflow validation step.
 
 ### Legacy local mock demo
 
@@ -139,7 +142,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-This validates the current milestone: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update execution.
+With `AGENT_PRIVATE_KEY` configured, this script validates the current milestone bridge end to end: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update submission. Without `AGENT_PRIVATE_KEY`, it is only partial evidence and does not prove the submission step.
 
 ### Deploy contracts to Base Sepolia
 

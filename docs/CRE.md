@@ -17,15 +17,24 @@ This document intentionally separates the current development/test trigger path 
 
 ## Current Dev/Test Flow
 
-### Package-level simulation
+### Real workflow validation
 
 ```bash
 cd liquidmind/agentic-liquidity
 npm install
-npm run simulate
+npm run validate:real
 ```
 
-This is the current package-level development path.
+This is the current package-level validation path for the real CRE workflow entrypoint.
+
+### Legacy local mock demo
+
+```bash
+cd liquidmind/agentic-liquidity
+npm run simulate:mock
+```
+
+This is retained only for local demo output and should not be treated as the canonical workflow validation path.
 
 ### CRE-oriented compilation
 
@@ -34,13 +43,14 @@ cd liquidmind/agentic-liquidity
 npm run cre-compile
 ```
 
-Use this when you want to compile the workflow entrypoint for CRE validation work.
+Use this when you want the direct compile command behind `npm run validate:real`.
 
 ### Trigger mode today
 
 - The current development/test configuration includes a cron-style schedule in `liquidmind/agentic-liquidity/config.staging.json`.
-- Treat that scheduled trigger as the current simulation and validation path.
+- Treat that scheduled trigger as the current development/test entrypoint for workflow compilation and payload generation.
 - Do not treat cron-only triggering as the final intended operator experience.
+- The canonical package currently emits action payloads; submission and live evidence for those payloads are still bridged by external operator/test flows.
 
 ## Next Milestone
 
