@@ -14,18 +14,16 @@
  */
 
 import { PriceFeedUtil, formatPrice, calculateUsdValue } from "./utils/price-feed.js";
+import {
+  DEFAULT_DEVELOPMENT_INTENT,
+  normalizeWorkflowIntentInput,
+  type LiquidityIntent,
+} from "./lib/intent.js";
 
 // Mock state
 interface MockState {
   step: number;
-  intent: {
-    action: "deposit" | "withdraw" | "rebalance";
-    tokenA: string;
-    tokenB: string;
-    amount: bigint;
-    riskTolerance: "low" | "medium" | "high";
-    minYield: number;
-  };
+  intent: LiquidityIntent;
   prices: {
     tokenA: number;
     tokenB: number;
@@ -92,6 +90,7 @@ async function step1IntentAnalysis(state: MockState): Promise<MockState> {
   logDetail("Amount", `${(Number(state.intent.amount) / 1e18).toFixed(4)} tokens`);
   logDetail("USD Value", formatPrice(usdValue));
   logDetail("Risk Tolerance", state.intent.riskTolerance);
+  logDetail("Preferred Chains", state.intent.preferredChains.join(", "));
   logDetail("Min Yield Required", `${state.intent.minYield}%`);
   
   // Validate
@@ -305,14 +304,7 @@ async function runMockWorkflow(): Promise<void> {
   // Initial state
   const initialState: MockState = {
     step: 0,
-    intent: {
-      action: "deposit",
-      tokenA: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
-      tokenB: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
-      amount: BigInt("1000000000000000000"), // 1 ETH
-      riskTolerance: "medium",
-      minYield: 5
-    },
+    intent: normalizeWorkflowIntentInput(DEFAULT_DEVELOPMENT_INTENT),
     prices: { tokenA: 0, tokenB: 0 }
   };
   

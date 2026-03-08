@@ -17,8 +17,10 @@ import { cre, handler, httpTrigger, type Runtime, Runner } from "@chainlink/cre-
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
 import {
   DEFAULT_DEVELOPMENT_INTENT,
-  normalizeIntentInput,
+  normalizeWorkflowIntentInput,
+  toIntentPayload,
   type LiquidityIntent,
+  type LiquidityIntentPayload,
 } from "./src/lib/intent.js";
 import { encodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "viem";
 
@@ -225,6 +227,10 @@ interface WorkflowState {
     coordinatorCalldata: Hex;
     coordinator: Hex;
   };
+}
+
+interface TransportWorkflowState extends Omit<WorkflowState, "intent"> {
+  intent: LiquidityIntentPayload;
 }
 
 // Price feed utility instance
@@ -497,21 +503,12 @@ interface Config {
   httpTrigger?: { path: string; method: string };
 }
 
-function resolveHttpIntentPayload(request: unknown): unknown {
-  if (request == null || typeof request !== "object" || Array.isArray(request)) {
-    return request;
-  }
-
-  const candidate = request as Record<string, unknown>;
-  return candidate.body ?? candidate.payload ?? candidate.intent ?? request;
-}
-
 async function runCanonicalWorkflow(
   intentInput: unknown,
   runtime?: Runtime<Config>,
   options: { fallbackToDefault?: boolean } = {},
 ): Promise<WorkflowState> {
-  const intent = normalizeIntentInput(intentInput, {
+  const intent = normalizeWorkflowIntentInput(intentInput, {
     fallbackToDefault: options.fallbackToDefault,
   });
 
@@ -521,12 +518,22 @@ async function runCanonicalWorkflow(
   return state;
 }
 
+function toTransportWorkflowState(state: WorkflowState): TransportWorkflowState {
+  return {
+    ...state,
+    intent: toIntentPayload(state.intent),
+  };
+}
+
 // HTTP-triggered canonical workflow path.
 // Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
 const onHttpTrigger = async (
   runtime: Runtime<Config>,
   request: unknown,
-): Promise<WorkflowState> => runCanonicalWorkflow(resolveHttpIntentPayload(request), runtime);
+): Promise<TransportWorkflowState> => {
+  const state = await runCanonicalWorkflow(request, runtime);
+  return toTransportWorkflowState(state);
+};
 
 // Cron-triggered development fallback path.
 const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =>
@@ -551,7 +558,7 @@ export async function main() {
 // Workflow runner for local simulation only (not exported - Javy rejects exported fns with params)
 // This deeper flow is intentionally not part of the canonical onCronTrigger path.
 async function runLiquidityWorkflow(intentInput: unknown): Promise<WorkflowState> {
-  const intent = normalizeIntentInput(intentInput, { fallbackToDefault: true });
+  const intent = normalizeWorkflowIntentInput(intentInput, { fallbackToDefault: true });
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state); // no runtime → mock prices (local-only path)
   state = await coordinateAgents(state);

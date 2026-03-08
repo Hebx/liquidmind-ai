@@ -1,4 +1,5 @@
 export type RiskTolerance = "low" | "medium" | "high";
+export const SUPPORTED_EXECUTION_CHAIN = "base-sepolia";
 
 export interface LiquidityIntentPayload {
   action?: "rebalance";
@@ -57,6 +58,40 @@ export function normalizeIntentInput(
     preferredChains,
     riskTolerance,
     minYield,
+  };
+}
+
+export function normalizeWorkflowIntentInput(
+  input: unknown,
+  options: NormalizeIntentOptions = {},
+): LiquidityIntent {
+  return normalizeIntentInput(extractIntentPayload(input), options);
+}
+
+export function extractIntentPayload(input: unknown): unknown {
+  if (input == null || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const candidate = input as Record<string, unknown>;
+  for (const key of ["body", "payload", "intent"] as const) {
+    if (candidate[key] != null) {
+      return candidate[key];
+    }
+  }
+
+  return input;
+}
+
+export function toIntentPayload(intent: LiquidityIntent): LiquidityIntentPayload {
+  return {
+    action: intent.action,
+    tokenA: intent.tokenA,
+    tokenB: intent.tokenB,
+    amount: intent.amount.toString(),
+    preferredChains: [...intent.preferredChains],
+    riskTolerance: intent.riskTolerance,
+    minYield: intent.minYield,
   };
 }
 
@@ -162,6 +197,12 @@ function normalizePreferredChains(value: unknown): string[] {
 
   if (normalized.length === 0) {
     throw new Error("Invalid intent: preferredChains must be a non-empty array");
+  }
+
+  if (normalized.some((chain) => chain !== SUPPORTED_EXECUTION_CHAIN)) {
+    throw new Error(
+      `Invalid intent: only ${SUPPORTED_EXECUTION_CHAIN} is supported in this milestone`,
+    );
   }
 
   return normalized;
