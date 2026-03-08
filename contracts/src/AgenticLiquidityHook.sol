@@ -35,6 +35,8 @@ contract AgenticLiquidityHook is BaseHook {
     error InvalidPool();
     error ActionAlreadyExecuted(bytes32 actionId);
     error FeeOutOfBounds(uint24 fee, uint24 minFee, uint24 maxFee);
+    error FeeUpdateCooldownActive(uint256 nextAllowedTimestamp);
+    error FeeFieldsImmutableViaUpdateConfig();
     error AgentOnlyPool(address caller);
     error InvalidTickRange(int24 lower, int24 upper);
     error InvalidDefenseStateTransition(DefenseState currentState, DefenseState nextState);
@@ -121,6 +123,8 @@ contract AgenticLiquidityHook is BaseHook {
     uint24 public constant DEFAULT_BASE_FEE = 3000;
     uint24 public constant DEFAULT_MAX_FEE  = 10000;
     uint24 public constant DEFAULT_MIN_FEE  = 500;
+    uint24 public constant MAX_FEE_STEP_BPS = 1000;
+    uint256 public constant FEE_UPDATE_COOLDOWN = 60;
 
     // ============ State ============
     mapping(PoolId => PoolConfig) public poolConfigs;
@@ -141,6 +145,8 @@ contract AgenticLiquidityHook is BaseHook {
     mapping(PoolId => VolatilityRegime) private poolVolatilityRegimes;
     mapping(PoolId => VolatilityRegime) private pendingVolatilityRegimes;
     mapping(PoolId => uint8) private pendingVolatilityRegimeCounts;
+    // Last timestamp when coordinator-applied fee update was accepted
+    mapping(PoolId => uint256) public lastFeeUpdateTimestamp;
 
     // ============ Modifiers ============
     modifier onlyOwner() {
@@ -365,17 +371,28 @@ contract AgenticLiquidityHook is BaseHook {
         returns (uint24)
     {
         uint256 ema = volatilityEMA[poolId];
-        if (ema == 0) return config.baseFee;
+        uint24 minFee = config.minFee;
+        uint24 maxFee = config.maxFee;
+        uint24 baseFee = _clampFee(config.baseFee, minFee, maxFee);
+
+        if (ema == 0) return baseFee;
 
         uint256 avgTicks = ema / EMA_PRECISION;
 
-        if (avgTicks <= VOL_LOW_TICKS)  return config.minFee;
-        if (avgTicks >= VOL_HIGH_TICKS) return config.maxFee;
+        if (avgTicks <= VOL_LOW_TICKS) return minFee;
+        if (avgTicks >= VOL_HIGH_TICKS) return maxFee;
 
-        uint256 feeRange  = config.maxFee - config.minFee;
-        uint256 volRange  = VOL_HIGH_TICKS - VOL_LOW_TICKS;
-        uint256 fee = config.minFee + (avgTicks - VOL_LOW_TICKS) * feeRange / volRange;
-        return uint24(fee);
+        uint256 midTicks = (VOL_LOW_TICKS + VOL_HIGH_TICKS) / 2;
+        uint256 fee;
+        if (avgTicks <= midTicks) {
+            uint256 lowSpan = midTicks - VOL_LOW_TICKS;
+            fee = uint256(minFee) + (avgTicks - VOL_LOW_TICKS) * (baseFee - minFee) / lowSpan;
+        } else {
+            uint256 highSpan = VOL_HIGH_TICKS - midTicks;
+            fee = uint256(baseFee) + (avgTicks - midTicks) * (maxFee - baseFee) / highSpan;
+        }
+
+        return _clampFee(uint24(fee), minFee, maxFee);
     }
 
     // ============ Internal: Rebalance ============
@@ -444,8 +461,19 @@ contract AgenticLiquidityHook is BaseHook {
         if (newFee < config.minFee || newFee > config.maxFee) {
             revert FeeOutOfBounds(newFee, config.minFee, config.maxFee);
         }
-        config.baseFee = newFee;
-        emit FeeUpdated(poolId, newFee, volatilityEMA[poolId]);
+
+        uint256 lastUpdate = lastFeeUpdateTimestamp[poolId];
+        uint256 nextAllowed = lastUpdate + FEE_UPDATE_COOLDOWN;
+        if (lastUpdate != 0 && block.timestamp < nextAllowed) {
+            revert FeeUpdateCooldownActive(nextAllowed);
+        }
+
+        uint24 cappedFee = _applyFeeStepCap(config.baseFee, newFee);
+        cappedFee = _clampFee(cappedFee, config.minFee, config.maxFee);
+        config.baseFee = cappedFee;
+        lastFeeUpdateTimestamp[poolId] = block.timestamp;
+
+        emit FeeUpdated(poolId, cappedFee, volatilityEMA[poolId]);
         return true;
     }
 
@@ -457,7 +485,18 @@ contract AgenticLiquidityHook is BaseHook {
 
     function _executeUpdateConfig(PoolKey memory key, bytes memory data) internal returns (bool) {
         PoolConfig memory cfg = abi.decode(data, (PoolConfig));
-        poolConfigs[key.toId()] = cfg;
+        PoolId poolId = key.toId();
+        PoolConfig storage existing = poolConfigs[poolId];
+
+        if (
+            cfg.baseFee != existing.baseFee
+                || cfg.minFee != existing.minFee
+                || cfg.maxFee != existing.maxFee
+        ) {
+            revert FeeFieldsImmutableViaUpdateConfig();
+        }
+
+        poolConfigs[poolId] = cfg;
         return true;
     }
 
@@ -467,6 +506,29 @@ contract AgenticLiquidityHook is BaseHook {
         int24 rem = tick % spacing;
         if (rem < 0) rem += spacing;
         return tick - rem;
+    }
+
+    function _applyFeeStepCap(uint24 currentFee, uint24 targetFee) internal pure returns (uint24) {
+        if (currentFee == targetFee) return targetFee;
+
+        uint256 maxStep = uint256(currentFee) * MAX_FEE_STEP_BPS / 10_000;
+        if (maxStep == 0) maxStep = 1;
+
+        if (targetFee > currentFee) {
+            uint256 maxUp = uint256(currentFee) + maxStep;
+            if (targetFee > maxUp) return uint24(maxUp);
+            return targetFee;
+        }
+
+        uint256 minDown = maxStep >= currentFee ? 0 : uint256(currentFee) - maxStep;
+        if (targetFee < minDown) return uint24(minDown);
+        return targetFee;
+    }
+
+    function _clampFee(uint24 fee, uint24 minFee, uint24 maxFee) internal pure returns (uint24) {
+        if (fee < minFee) return minFee;
+        if (fee > maxFee) return maxFee;
+        return fee;
     }
 
     /**

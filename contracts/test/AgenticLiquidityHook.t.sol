@@ -227,6 +227,27 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         assertEq(hook.getVolatilityAvgTicks(poolId), 0);
     }
 
+    function test_DynamicFee_RespectsMinAndMaxBounds() public {
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        _setVolatilityEmaTicks(poolId, 1);
+        assertEq(hook.getCurrentDynamicFee(poolId), 100, "low vol should clamp to minFee");
+
+        _setVolatilityEmaTicks(poolId, 500);
+        assertEq(hook.getCurrentDynamicFee(poolId), 10000, "high vol should clamp to maxFee");
+    }
+
     // ============ Position Rebalance Tests ============
 
     function test_NeedsRebalanceReturnsFalseAtInit() public view {
@@ -320,7 +341,9 @@ contract AgenticLiquidityHookTest is Test, Deployers {
 
         bool success = hook.executeAgentAction(bytes32(uint256(1)), "updateFee", encodedKey, actionData);
         assertTrue(success);
-        assertEq(hook.getPoolConfig(poolId).baseFee, 5000);
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        assertEq(hook.getPoolConfig(poolId).baseFee, 3000 + maxStep);
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), block.timestamp);
     }
 
     function test_ExecuteFeeUpdate_OutOfBoundsReverts() public {
@@ -329,6 +352,151 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         bytes memory actionData = abi.encode(uint24(50000)); // > maxFee
         vm.expectRevert();
         hook.executeAgentAction(bytes32(uint256(2)), "updateFee", encodedKey, actionData);
+    }
+
+    function test_FeeJump_IsCappedPerUpdate() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        bytes memory actionData = abi.encode(uint24(10000));
+        bool success = hook.executeAgentAction(bytes32(uint256(101)), "updateFee", encodedKey, actionData);
+        assertTrue(success);
+
+        uint24 currentFee = hook.getPoolConfig(poolId).baseFee;
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        uint24 expected = 3000 + maxStep;
+        assertEq(currentFee, expected, "fee jump should be capped");
+    }
+
+    function test_FeeJump_DownwardIsCappedPerUpdate() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        bool success = hook.executeAgentAction(bytes32(uint256(151)), "updateFee", encodedKey, abi.encode(uint24(100)));
+        assertTrue(success);
+
+        uint24 currentFee = hook.getPoolConfig(poolId).baseFee;
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        uint24 expected = 3000 - maxStep;
+        assertEq(currentFee, expected, "downward fee jump should be capped");
+    }
+
+    function test_FeeUpdate_RespectsCooldown() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        hook.executeAgentAction(bytes32(uint256(201)), "updateFee", encodedKey, abi.encode(uint24(3200)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgenticLiquidityHook.FeeUpdateCooldownActive.selector,
+                block.timestamp + hook.FEE_UPDATE_COOLDOWN()
+            )
+        );
+        hook.executeAgentAction(bytes32(uint256(202)), "updateFee", encodedKey, abi.encode(uint24(3300)));
+    }
+
+    function test_FeeUpdate_CooldownAllowsAtBoundaryAndAfter() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        hook.executeAgentAction(bytes32(uint256(211)), "updateFee", encodedKey, abi.encode(uint24(3200)));
+
+        uint256 boundaryTs = block.timestamp + hook.FEE_UPDATE_COOLDOWN();
+        vm.warp(boundaryTs);
+        bool boundarySuccess =
+            hook.executeAgentAction(bytes32(uint256(212)), "updateFee", encodedKey, abi.encode(uint24(3300)));
+        assertTrue(boundarySuccess, "boundary update should succeed");
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), boundaryTs);
+
+        vm.warp(boundaryTs + 1 + hook.FEE_UPDATE_COOLDOWN());
+        bool afterSuccess =
+            hook.executeAgentAction(bytes32(uint256(213)), "updateFee", encodedKey, abi.encode(uint24(3400)));
+        assertTrue(afterSuccess, "post-boundary update should succeed");
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), boundaryTs + 1 + hook.FEE_UPDATE_COOLDOWN());
+    }
+
+    function test_UpdateConfig_CannotBypassFeeConstraints() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        AgenticLiquidityHook.PoolConfig memory cfg = AgenticLiquidityHook.PoolConfig({
+            baseFee: 10000,
+            maxFee: 20000,
+            minFee: 50,
+            rebalanceThreshold: 250,
+            autoRebalance: false,
+            agentOnlyLPs: true
+        });
+
+        vm.expectRevert();
+        hook.executeAgentAction(bytes32(uint256(250)), "updateConfig", encodedKey, abi.encode(cfg));
+
+        AgenticLiquidityHook.PoolConfig memory stored = hook.getPoolConfig(poolId);
+        assertEq(stored.baseFee, 3000, "base fee must remain unchanged");
+        assertEq(stored.maxFee, 10000, "max fee must remain unchanged");
+        assertEq(stored.minFee, 100, "min fee must remain unchanged");
     }
 
     function test_ExecuteSetAgentOnly() public {
