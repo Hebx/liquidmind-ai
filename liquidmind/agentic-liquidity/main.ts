@@ -20,6 +20,7 @@ import {
   type PreparedFeeAction,
   type PreparedHookAction,
 } from "./src/canonical-preparation";
+import { executeCanonicalHttpWorkflow } from "./src/canonical-intent-workflow.js";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
 import {
   DEFAULT_DEVELOPMENT_INTENT,
@@ -349,10 +350,14 @@ function toTransportWorkflowState(state: WorkflowState): TransportWorkflowState 
 const onHttpTrigger = async (
   runtime: Runtime<Config>,
   request: unknown,
-): Promise<TransportWorkflowState> => {
-  const state = await runCanonicalWorkflow(request, runtime);
-  return toTransportWorkflowState(state);
-};
+): Promise<TransportWorkflowState> =>
+  executeCanonicalHttpWorkflow(request, {
+    marketDataReader: {
+      getPrice: (tokenAddressOrSymbol: string) => priceFeed.getPrice(tokenAddressOrSymbol, runtime),
+      getVolatility: (symbol: string, numRounds: number = 5) =>
+        priceFeed.getVolatility(symbol, runtime, numRounds),
+    },
+  });
 
 // Cron-triggered development fallback path.
 const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =>

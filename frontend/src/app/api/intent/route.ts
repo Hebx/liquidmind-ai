@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { executeCanonicalIntentWorkflow } from "../../../../../liquidmind/agentic-liquidity/src/canonical-intent-workflow";
+import { executeCanonicalHttpWorkflow } from "../../../../../liquidmind/agentic-liquidity/src/canonical-intent-workflow";
 import {
   IntentParserError,
   parseIntentRequestBody,
@@ -11,12 +11,12 @@ export const runtime = "nodejs";
 
 interface IntentRouteDependencies {
   parseIntent: typeof parseIntentWithModel;
-  executeWorkflow: typeof executeCanonicalIntentWorkflow;
+  executeWorkflow: typeof executeCanonicalHttpWorkflow;
 }
 
 const DEFAULT_INTENT_ROUTE_DEPENDENCIES: IntentRouteDependencies = {
   parseIntent: parseIntentWithModel,
-  executeWorkflow: executeCanonicalIntentWorkflow,
+  executeWorkflow: executeCanonicalHttpWorkflow,
 };
 
 export async function POST(request: Request) {
