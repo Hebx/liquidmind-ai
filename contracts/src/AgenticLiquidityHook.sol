@@ -35,8 +35,12 @@ contract AgenticLiquidityHook is BaseHook {
     error InvalidPool();
     error ActionAlreadyExecuted(bytes32 actionId);
     error FeeOutOfBounds(uint24 fee, uint24 minFee, uint24 maxFee);
+    error FeeUpdateCooldownActive(uint256 nextAllowedTimestamp);
+    error FeeFieldsImmutableViaUpdateConfig();
     error AgentOnlyPool(address caller);
     error InvalidTickRange(int24 lower, int24 upper);
+    error InvalidDefenseStateTransition(DefenseState currentState, DefenseState nextState);
+    error PoolNotInitialized(PoolId poolId);
 
     // ============ Events ============
     event LiquidityRebalanced(
@@ -58,6 +62,17 @@ contract AgenticLiquidityHook is BaseHook {
         int24 suggestedLower,
         int24 suggestedUpper
     );
+    event DefenseStateTransitioned(
+        PoolId indexed poolId,
+        DefenseState previousState,
+        DefenseState newState
+    );
+    event RegimeChanged(
+        PoolId indexed poolId,
+        VolatilityRegime oldRegime,
+        VolatilityRegime newRegime,
+        uint256 ema
+    );
 
     // ============ Structs ============
     struct PoolConfig {
@@ -76,6 +91,19 @@ contract AgenticLiquidityHook is BaseHook {
         uint256 lastRebalance;
     }
 
+    enum DefenseState {
+        NORMAL,
+        WARNING,
+        DEFENSE,
+        RECOVERY
+    }
+
+    enum VolatilityRegime {
+        LOW,
+        NORMAL,
+        HIGH
+    }
+
     // ============ EMA Constants ============
     // alpha = 10/100 = 10% (smoothed over ~10 swaps)
     // EMA stored as rawValue * EMA_PRECISION to preserve sub-integer precision
@@ -86,11 +114,17 @@ contract AgenticLiquidityHook is BaseHook {
     // Volatility thresholds (ticks per swap after dividing EMA by EMA_PRECISION)
     uint256 private constant VOL_LOW_TICKS  = 5;
     uint256 private constant VOL_HIGH_TICKS = 100;
+    uint256 private constant VOL_LOW_EXIT_TICKS  = 7;
+    uint256 private constant VOL_HIGH_EXIT_TICKS = 90;
+    uint256 private constant REGIME_MARGIN_TICKS = 2;
+    uint8   private constant REGIME_QUALIFYING_UPDATES = 2;
 
     // Default config values
     uint24 public constant DEFAULT_BASE_FEE = 3000;
     uint24 public constant DEFAULT_MAX_FEE  = 10000;
     uint24 public constant DEFAULT_MIN_FEE  = 500;
+    uint24 public constant MAX_FEE_STEP_BPS = 1000;
+    uint256 public constant FEE_UPDATE_COOLDOWN = 60;
 
     // ============ State ============
     mapping(PoolId => PoolConfig) public poolConfigs;
@@ -106,6 +140,13 @@ contract AgenticLiquidityHook is BaseHook {
 
     address public owner;
     address public agentCoordinator;
+    mapping(PoolId => DefenseState) private poolDefenseStates;
+    mapping(PoolId => bool) private poolInitialized;
+    mapping(PoolId => VolatilityRegime) private poolVolatilityRegimes;
+    mapping(PoolId => VolatilityRegime) private pendingVolatilityRegimes;
+    mapping(PoolId => uint8) private pendingVolatilityRegimeCounts;
+    // Last timestamp when coordinator-applied fee update was accepted
+    mapping(PoolId => uint256) public lastFeeUpdateTimestamp;
 
     // ============ Modifiers ============
     modifier onlyOwner() {
@@ -157,6 +198,10 @@ contract AgenticLiquidityHook is BaseHook {
             liquidity:     0,
             lastRebalance: block.timestamp
         });
+
+        poolInitialized[poolId] = true;
+        poolDefenseStates[poolId] = DefenseState.NORMAL;
+        poolVolatilityRegimes[poolId] = VolatilityRegime.NORMAL;
 
         return this.afterInitialize.selector;
     }
@@ -213,6 +258,7 @@ contract AgenticLiquidityHook is BaseHook {
 
         // Update EMA with this swap's tick delta
         _updateVolatilityEMA(poolId, tick);
+        _refreshVolatilityRegime(poolId);
         currentTick[poolId] = tick;
 
         uint24 newFee = _calculateDynamicFee(poolId, poolConfigs[poolId]);
@@ -325,17 +371,28 @@ contract AgenticLiquidityHook is BaseHook {
         returns (uint24)
     {
         uint256 ema = volatilityEMA[poolId];
-        if (ema == 0) return config.baseFee;
+        uint24 minFee = config.minFee;
+        uint24 maxFee = config.maxFee;
+        uint24 baseFee = _clampFee(config.baseFee, minFee, maxFee);
+
+        if (ema == 0) return baseFee;
 
         uint256 avgTicks = ema / EMA_PRECISION;
 
-        if (avgTicks <= VOL_LOW_TICKS)  return config.minFee;
-        if (avgTicks >= VOL_HIGH_TICKS) return config.maxFee;
+        if (avgTicks <= VOL_LOW_TICKS) return minFee;
+        if (avgTicks >= VOL_HIGH_TICKS) return maxFee;
 
-        uint256 feeRange  = config.maxFee - config.minFee;
-        uint256 volRange  = VOL_HIGH_TICKS - VOL_LOW_TICKS;
-        uint256 fee = config.minFee + (avgTicks - VOL_LOW_TICKS) * feeRange / volRange;
-        return uint24(fee);
+        uint256 midTicks = (VOL_LOW_TICKS + VOL_HIGH_TICKS) / 2;
+        uint256 fee;
+        if (avgTicks <= midTicks) {
+            uint256 lowSpan = midTicks - VOL_LOW_TICKS;
+            fee = uint256(minFee) + (avgTicks - VOL_LOW_TICKS) * (baseFee - minFee) / lowSpan;
+        } else {
+            uint256 highSpan = VOL_HIGH_TICKS - midTicks;
+            fee = uint256(baseFee) + (avgTicks - midTicks) * (maxFee - baseFee) / highSpan;
+        }
+
+        return _clampFee(uint24(fee), minFee, maxFee);
     }
 
     // ============ Internal: Rebalance ============
@@ -404,8 +461,19 @@ contract AgenticLiquidityHook is BaseHook {
         if (newFee < config.minFee || newFee > config.maxFee) {
             revert FeeOutOfBounds(newFee, config.minFee, config.maxFee);
         }
-        config.baseFee = newFee;
-        emit FeeUpdated(poolId, newFee, volatilityEMA[poolId]);
+
+        uint256 lastUpdate = lastFeeUpdateTimestamp[poolId];
+        uint256 nextAllowed = lastUpdate + FEE_UPDATE_COOLDOWN;
+        if (lastUpdate != 0 && block.timestamp < nextAllowed) {
+            revert FeeUpdateCooldownActive(nextAllowed);
+        }
+
+        uint24 cappedFee = _applyFeeStepCap(config.baseFee, newFee);
+        cappedFee = _clampFee(cappedFee, config.minFee, config.maxFee);
+        config.baseFee = cappedFee;
+        lastFeeUpdateTimestamp[poolId] = block.timestamp;
+
+        emit FeeUpdated(poolId, cappedFee, volatilityEMA[poolId]);
         return true;
     }
 
@@ -417,7 +485,18 @@ contract AgenticLiquidityHook is BaseHook {
 
     function _executeUpdateConfig(PoolKey memory key, bytes memory data) internal returns (bool) {
         PoolConfig memory cfg = abi.decode(data, (PoolConfig));
-        poolConfigs[key.toId()] = cfg;
+        PoolId poolId = key.toId();
+        PoolConfig storage existing = poolConfigs[poolId];
+
+        if (
+            cfg.baseFee != existing.baseFee
+                || cfg.minFee != existing.minFee
+                || cfg.maxFee != existing.maxFee
+        ) {
+            revert FeeFieldsImmutableViaUpdateConfig();
+        }
+
+        poolConfigs[poolId] = cfg;
         return true;
     }
 
@@ -427,6 +506,29 @@ contract AgenticLiquidityHook is BaseHook {
         int24 rem = tick % spacing;
         if (rem < 0) rem += spacing;
         return tick - rem;
+    }
+
+    function _applyFeeStepCap(uint24 currentFee, uint24 targetFee) internal pure returns (uint24) {
+        if (currentFee == targetFee) return targetFee;
+
+        uint256 maxStep = uint256(currentFee) * MAX_FEE_STEP_BPS / 10_000;
+        if (maxStep == 0) maxStep = 1;
+
+        if (targetFee > currentFee) {
+            uint256 maxUp = uint256(currentFee) + maxStep;
+            if (targetFee > maxUp) return uint24(maxUp);
+            return targetFee;
+        }
+
+        uint256 minDown = maxStep >= currentFee ? 0 : uint256(currentFee) - maxStep;
+        if (targetFee < minDown) return uint24(minDown);
+        return targetFee;
+    }
+
+    function _clampFee(uint24 fee, uint24 minFee, uint24 maxFee) internal pure returns (uint24) {
+        if (fee < minFee) return minFee;
+        if (fee > maxFee) return maxFee;
+        return fee;
     }
 
     /**
@@ -456,6 +558,23 @@ contract AgenticLiquidityHook is BaseHook {
         poolConfigs[poolId].agentOnlyLPs = enabled;
     }
 
+    function refreshVolatilityRegime(PoolId poolId) external onlyOwner {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        _refreshVolatilityRegime(poolId);
+    }
+
+    function transitionDefenseState(PoolId poolId, DefenseState nextState) external onlyOwner {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+
+        DefenseState currentState = poolDefenseStates[poolId];
+        if (!_isValidDefenseTransition(currentState, nextState)) {
+            revert InvalidDefenseStateTransition(currentState, nextState);
+        }
+
+        poolDefenseStates[poolId] = nextState;
+        emit DefenseStateTransitioned(poolId, currentState, nextState);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         owner = newOwner;
     }
@@ -480,5 +599,119 @@ contract AgenticLiquidityHook is BaseHook {
 
     function needsRebalance(PoolId poolId) external view returns (bool) {
         return _shouldRebalance(poolId, currentTick[poolId]);
+    }
+
+    function getDefenseState(PoolId poolId) external view returns (DefenseState) {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        return poolDefenseStates[poolId];
+    }
+
+    function getVolatilityRegime(PoolId poolId) external view returns (VolatilityRegime) {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        return poolVolatilityRegimes[poolId];
+    }
+
+    function _isPoolInitialized(PoolId poolId) internal view returns (bool) {
+        return poolInitialized[poolId];
+    }
+
+    function _refreshVolatilityRegime(PoolId poolId) internal {
+        VolatilityRegime current = poolVolatilityRegimes[poolId];
+        uint256 avgTicks = volatilityEMA[poolId] / EMA_PRECISION;
+        VolatilityRegime target = _classifyVolatilityRegime(current, avgTicks);
+
+        if (target == current) {
+            pendingVolatilityRegimeCounts[poolId] = 0;
+            return;
+        }
+
+        if (_isMarginQualifiedTransition(current, target, avgTicks)) {
+            _commitVolatilityRegime(poolId, current, target);
+            return;
+        }
+
+        if (
+            pendingVolatilityRegimeCounts[poolId] > 0
+                && pendingVolatilityRegimes[poolId] == target
+        ) {
+            pendingVolatilityRegimeCounts[poolId]++;
+        } else {
+            pendingVolatilityRegimes[poolId] = target;
+            pendingVolatilityRegimeCounts[poolId] = 1;
+        }
+
+        if (pendingVolatilityRegimeCounts[poolId] >= REGIME_QUALIFYING_UPDATES) {
+            _commitVolatilityRegime(poolId, current, target);
+        }
+    }
+
+    function _classifyVolatilityRegime(VolatilityRegime current, uint256 avgTicks)
+        internal
+        pure
+        returns (VolatilityRegime)
+    {
+        if (current == VolatilityRegime.LOW) {
+            if (avgTicks >= VOL_LOW_EXIT_TICKS) return VolatilityRegime.NORMAL;
+            return VolatilityRegime.LOW;
+        }
+
+        if (current == VolatilityRegime.HIGH) {
+            if (avgTicks <= VOL_HIGH_EXIT_TICKS) return VolatilityRegime.NORMAL;
+            return VolatilityRegime.HIGH;
+        }
+
+        if (avgTicks <= VOL_LOW_TICKS) return VolatilityRegime.LOW;
+        if (avgTicks >= VOL_HIGH_TICKS) return VolatilityRegime.HIGH;
+        return VolatilityRegime.NORMAL;
+    }
+
+    function _isMarginQualifiedTransition(
+        VolatilityRegime current,
+        VolatilityRegime target,
+        uint256 avgTicks
+    ) internal pure returns (bool) {
+        if (current == VolatilityRegime.NORMAL && target == VolatilityRegime.LOW) {
+            uint256 lowImmediate = VOL_LOW_TICKS > REGIME_MARGIN_TICKS
+                ? VOL_LOW_TICKS - REGIME_MARGIN_TICKS
+                : 0;
+            return avgTicks <= lowImmediate;
+        }
+        if (current == VolatilityRegime.NORMAL && target == VolatilityRegime.HIGH) {
+            return avgTicks >= VOL_HIGH_TICKS + REGIME_MARGIN_TICKS;
+        }
+        if (current == VolatilityRegime.LOW && target == VolatilityRegime.NORMAL) {
+            return avgTicks >= VOL_LOW_EXIT_TICKS + REGIME_MARGIN_TICKS;
+        }
+        if (current == VolatilityRegime.HIGH && target == VolatilityRegime.NORMAL) {
+            uint256 highImmediate = VOL_HIGH_EXIT_TICKS > REGIME_MARGIN_TICKS
+                ? VOL_HIGH_EXIT_TICKS - REGIME_MARGIN_TICKS
+                : 0;
+            return avgTicks <= highImmediate;
+        }
+        return false;
+    }
+
+    function _commitVolatilityRegime(
+        PoolId poolId,
+        VolatilityRegime oldRegime,
+        VolatilityRegime newRegime
+    ) internal {
+        poolVolatilityRegimes[poolId] = newRegime;
+        pendingVolatilityRegimeCounts[poolId] = 0;
+        emit RegimeChanged(poolId, oldRegime, newRegime, volatilityEMA[poolId]);
+    }
+
+    function _isValidDefenseTransition(DefenseState currentState, DefenseState nextState)
+        internal
+        pure
+        returns (bool)
+    {
+        if (currentState == DefenseState.NORMAL) return nextState == DefenseState.WARNING;
+        if (currentState == DefenseState.WARNING) {
+            return nextState == DefenseState.NORMAL || nextState == DefenseState.DEFENSE;
+        }
+        if (currentState == DefenseState.DEFENSE) return nextState == DefenseState.RECOVERY;
+        if (currentState == DefenseState.RECOVERY) return nextState == DefenseState.NORMAL;
+        return false;
     }
 }

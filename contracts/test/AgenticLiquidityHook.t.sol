@@ -16,6 +16,9 @@ import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 contract AgenticLiquidityHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
 
+    event DefenseStateTransitioned(PoolId indexed poolId, uint8 previousState, uint8 newState);
+    event RegimeChanged(PoolId indexed poolId, uint8 oldRegime, uint8 newRegime, uint256 ema);
+
     AgenticLiquidityHook public hook;
     MockERC20 public token0;
     MockERC20 public token1;
@@ -135,6 +138,81 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         assertEq(pos.tickUpper % 60, 0, "upper tick not snapped");
     }
 
+    function test_DefenseStateDefaultsToNormalOnInitialize() public view {
+        PoolId poolId = poolKey.toId();
+        assertEq(
+            uint8(hook.getDefenseState(poolId)),
+            uint8(AgenticLiquidityHook.DefenseState.NORMAL)
+        );
+    }
+
+    function test_GetDefenseState_RevertIfPoolUninitialized() public {
+        PoolId uninitializedPoolId = PoolId.wrap(bytes32(uint256(999)));
+        vm.expectRevert(
+            abi.encodeWithSelector(AgenticLiquidityHook.PoolNotInitialized.selector, uninitializedPoolId)
+        );
+        hook.getDefenseState(uninitializedPoolId);
+    }
+
+    function test_TransitionDefenseState_AllowsValidPath() public {
+        PoolId poolId = poolKey.toId();
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.WARNING));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.DEFENSE);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.DEFENSE));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.RECOVERY);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.RECOVERY));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.NORMAL);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.NORMAL));
+    }
+
+    function test_TransitionDefenseState_RevertOnInvalidTransition() public {
+        PoolId poolId = poolKey.toId();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgenticLiquidityHook.InvalidDefenseStateTransition.selector,
+                AgenticLiquidityHook.DefenseState.NORMAL,
+                AgenticLiquidityHook.DefenseState.DEFENSE
+            )
+        );
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.DEFENSE);
+    }
+
+    function test_TransitionDefenseState_EmitsEventOnSuccess() public {
+        PoolId poolId = poolKey.toId();
+        vm.expectEmit(true, false, false, true);
+        emit DefenseStateTransitioned(
+            poolId,
+            uint8(AgenticLiquidityHook.DefenseState.NORMAL),
+            uint8(AgenticLiquidityHook.DefenseState.WARNING)
+        );
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+    }
+
+    function test_DefenseStateAPIsRemainValidAfterZeroBaseFeeConfigUpdate() public {
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 0,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.NORMAL));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.WARNING));
+    }
+
     // ============ Dynamic Fee Tests ============
 
     function test_DynamicFeeReturnsBaseFeeWhenNoSwaps() public view {
@@ -147,6 +225,27 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         PoolId poolId = poolKey.toId();
         assertEq(hook.volatilityEMA(poolId), 0);
         assertEq(hook.getVolatilityAvgTicks(poolId), 0);
+    }
+
+    function test_DynamicFee_RespectsMinAndMaxBounds() public {
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        _setVolatilityEmaTicks(poolId, 1);
+        assertEq(hook.getCurrentDynamicFee(poolId), 100, "low vol should clamp to minFee");
+
+        _setVolatilityEmaTicks(poolId, 500);
+        assertEq(hook.getCurrentDynamicFee(poolId), 10000, "high vol should clamp to maxFee");
     }
 
     // ============ Position Rebalance Tests ============
@@ -242,7 +341,9 @@ contract AgenticLiquidityHookTest is Test, Deployers {
 
         bool success = hook.executeAgentAction(bytes32(uint256(1)), "updateFee", encodedKey, actionData);
         assertTrue(success);
-        assertEq(hook.getPoolConfig(poolId).baseFee, 5000);
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        assertEq(hook.getPoolConfig(poolId).baseFee, 3000 + maxStep);
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), block.timestamp);
     }
 
     function test_ExecuteFeeUpdate_OutOfBoundsReverts() public {
@@ -251,6 +352,151 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         bytes memory actionData = abi.encode(uint24(50000)); // > maxFee
         vm.expectRevert();
         hook.executeAgentAction(bytes32(uint256(2)), "updateFee", encodedKey, actionData);
+    }
+
+    function test_FeeJump_IsCappedPerUpdate() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        bytes memory actionData = abi.encode(uint24(10000));
+        bool success = hook.executeAgentAction(bytes32(uint256(101)), "updateFee", encodedKey, actionData);
+        assertTrue(success);
+
+        uint24 currentFee = hook.getPoolConfig(poolId).baseFee;
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        uint24 expected = 3000 + maxStep;
+        assertEq(currentFee, expected, "fee jump should be capped");
+    }
+
+    function test_FeeJump_DownwardIsCappedPerUpdate() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        bool success = hook.executeAgentAction(bytes32(uint256(151)), "updateFee", encodedKey, abi.encode(uint24(100)));
+        assertTrue(success);
+
+        uint24 currentFee = hook.getPoolConfig(poolId).baseFee;
+        uint24 maxStep = uint24((uint256(3000) * hook.MAX_FEE_STEP_BPS()) / 10_000);
+        uint24 expected = 3000 - maxStep;
+        assertEq(currentFee, expected, "downward fee jump should be capped");
+    }
+
+    function test_FeeUpdate_RespectsCooldown() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        hook.executeAgentAction(bytes32(uint256(201)), "updateFee", encodedKey, abi.encode(uint24(3200)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgenticLiquidityHook.FeeUpdateCooldownActive.selector,
+                block.timestamp + hook.FEE_UPDATE_COOLDOWN()
+            )
+        );
+        hook.executeAgentAction(bytes32(uint256(202)), "updateFee", encodedKey, abi.encode(uint24(3300)));
+    }
+
+    function test_FeeUpdate_CooldownAllowsAtBoundaryAndAfter() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        hook.executeAgentAction(bytes32(uint256(211)), "updateFee", encodedKey, abi.encode(uint24(3200)));
+
+        uint256 boundaryTs = block.timestamp + hook.FEE_UPDATE_COOLDOWN();
+        vm.warp(boundaryTs);
+        bool boundarySuccess =
+            hook.executeAgentAction(bytes32(uint256(212)), "updateFee", encodedKey, abi.encode(uint24(3300)));
+        assertTrue(boundarySuccess, "boundary update should succeed");
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), boundaryTs);
+
+        vm.warp(boundaryTs + 1 + hook.FEE_UPDATE_COOLDOWN());
+        bool afterSuccess =
+            hook.executeAgentAction(bytes32(uint256(213)), "updateFee", encodedKey, abi.encode(uint24(3400)));
+        assertTrue(afterSuccess, "post-boundary update should succeed");
+        assertEq(hook.lastFeeUpdateTimestamp(poolId), boundaryTs + 1 + hook.FEE_UPDATE_COOLDOWN());
+    }
+
+    function test_UpdateConfig_CannotBypassFeeConstraints() public {
+        hook.setAgentCoordinator(address(this));
+        PoolId poolId = poolKey.toId();
+
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 3000,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        bytes memory encodedKey = abi.encode(poolKey);
+        AgenticLiquidityHook.PoolConfig memory cfg = AgenticLiquidityHook.PoolConfig({
+            baseFee: 10000,
+            maxFee: 20000,
+            minFee: 50,
+            rebalanceThreshold: 250,
+            autoRebalance: false,
+            agentOnlyLPs: true
+        });
+
+        vm.expectRevert();
+        hook.executeAgentAction(bytes32(uint256(250)), "updateConfig", encodedKey, abi.encode(cfg));
+
+        AgenticLiquidityHook.PoolConfig memory stored = hook.getPoolConfig(poolId);
+        assertEq(stored.baseFee, 3000, "base fee must remain unchanged");
+        assertEq(stored.maxFee, 10000, "max fee must remain unchanged");
+        assertEq(stored.minFee, 100, "min fee must remain unchanged");
     }
 
     function test_ExecuteSetAgentOnly() public {
@@ -263,5 +509,170 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         bool success = hook.executeAgentAction(bytes32(uint256(3)), "setAgentOnly", encodedKey, actionData);
         assertTrue(success);
         assertTrue(hook.getPoolConfig(poolId).agentOnlyLPs);
+    }
+
+    // ============ Volatility Regime Tests ============
+
+    function test_Regime_DoesNotOscillateAtBoundary() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        _setVolatilityEmaTicks(poolId, 6);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 5);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 6);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 5);
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+    }
+
+    function test_Regime_RequiresQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 100);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            100_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+    }
+
+    function test_Regime_ThresholdPlusMarginTransitionsImmediately() public {
+        PoolId poolId = poolKey.toId();
+        _setVolatilityEmaTicks(poolId, 102);
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            102_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+    }
+
+    function test_Regime_ThresholdMinusMarginTransitionsImmediatelyOnLowSide() public {
+        PoolId poolId = poolKey.toId();
+        _setVolatilityEmaTicks(poolId, 3);
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW),
+            3_000
+        );
+        hook.refreshVolatilityRegime(poolId);
+
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+    }
+
+    function test_Regime_LowToNormalRequiresHysteresisExitQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 1);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        _setVolatilityEmaTicks(poolId, 7);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.LOW),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            7_000
+        );
+        _setVolatilityEmaTicks(poolId, 7);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+    }
+
+    function test_Regime_HighToNormalRequiresHysteresisExitQualifyingUpdates() public {
+        PoolId poolId = poolKey.toId();
+
+        _setVolatilityEmaTicks(poolId, 110);
+        hook.refreshVolatilityRegime(poolId);
+        _setVolatilityEmaTicks(poolId, 110);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+
+        _setVolatilityEmaTicks(poolId, 90);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH)
+        );
+
+        vm.expectEmit(true, false, false, true);
+        emit RegimeChanged(
+            poolId,
+            uint8(AgenticLiquidityHook.VolatilityRegime.HIGH),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL),
+            90_000
+        );
+        _setVolatilityEmaTicks(poolId, 90);
+        hook.refreshVolatilityRegime(poolId);
+        assertEq(
+            uint8(hook.getVolatilityRegime(poolId)),
+            uint8(AgenticLiquidityHook.VolatilityRegime.NORMAL)
+        );
+    }
+
+    function _setVolatilityEmaTicks(PoolId poolId, uint256 avgTicks) internal {
+        uint256 scaled = avgTicks * 1_000;
+        bytes32 slot = keccak256(abi.encode(PoolId.unwrap(poolId), uint256(3)));
+        vm.store(address(hook), slot, bytes32(scaled));
     }
 }
