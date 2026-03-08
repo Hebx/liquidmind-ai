@@ -96,6 +96,26 @@ test("createOpenAICompatibleIntentProvider requires server-side provider configu
   );
 });
 
+test("createOpenAICompatibleIntentProvider rejects malformed timeout strings", () => {
+  for (const timeoutValue of ["10s", "5000ms"]) {
+    assert.throws(
+      () =>
+        createOpenAICompatibleIntentProvider({
+          env: {
+            INTENT_PARSER_API_URL: "https://example.com/v1/chat/completions",
+            INTENT_PARSER_API_KEY: "test-key",
+            INTENT_PARSER_MODEL: "gpt-4.1-mini",
+            INTENT_PARSER_TIMEOUT_MS: timeoutValue,
+          },
+        }),
+      (error: unknown) =>
+        error instanceof IntentParserError &&
+        error.code === "CONFIG_ERROR" &&
+        /INTENT_PARSER_TIMEOUT_MS/i.test(error.message),
+    );
+  }
+});
+
 test("createOpenAICompatibleIntentProvider parses JSON content from an OpenAI-compatible response", async () => {
   const fetchCalls: Array<{
     input: RequestInfo | URL;

@@ -221,9 +221,13 @@ function resolveTimeoutMs(rawTimeoutMs: string | undefined, timeoutMsOverride: n
   }
 
   const parsedTimeoutMs =
-    typeof resolvedValue === "number" ? resolvedValue : Number.parseInt(resolvedValue, 10);
+    typeof resolvedValue === "number"
+      ? resolvedValue
+      : /^\d+$/.test(resolvedValue)
+        ? Number(resolvedValue)
+        : Number.NaN;
 
-  if (!Number.isFinite(parsedTimeoutMs) || parsedTimeoutMs <= 0) {
+  if (!Number.isInteger(parsedTimeoutMs) || parsedTimeoutMs <= 0) {
     throw new IntentParserError(
       "CONFIG_ERROR",
       "INTENT_PARSER_TIMEOUT_MS must be a positive integer when configured.",
