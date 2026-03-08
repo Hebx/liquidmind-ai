@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as intentLib from "./intent.js";
 
 import {
   DEFAULT_DEVELOPMENT_INTENT,
   normalizeIntentInput,
+  normalizeWorkflowIntentInput,
+  toIntentPayload,
 } from "./intent.js";
 
 test("normalizeIntentInput coerces a JSON-friendly payload into canonical intent", () => {
@@ -83,28 +84,29 @@ test("normalizeIntentInput rejects preferred chains outside base-sepolia", () =>
   );
 });
 
-test("normalizeWorkflowIntentInput extracts a wrapped body payload without falling back", () => {
-  const normalizeWorkflowIntentInput = (
-    intentLib as {
-      normalizeWorkflowIntentInput?: (input: unknown, options?: { fallbackToDefault?: boolean }) => {
-        action: string;
-        tokenA: string;
-        tokenB: string;
-        amount: bigint;
-        preferredChains: string[];
-        riskTolerance: string;
-        minYield: number;
-      };
-    }
-  ).normalizeWorkflowIntentInput;
+test("normalizeIntentInput rejects unsupported asset pairs", () => {
+  assert.throws(
+    () =>
+      normalizeIntentInput({
+        tokenA: "CBETH",
+        tokenB: "USDC",
+        amount: "1000000",
+        preferredChains: ["base-sepolia"],
+        riskTolerance: "medium",
+        minYield: 5,
+      }),
+    /weth\/usdc/i,
+  );
+});
 
+test("normalizeWorkflowIntentInput extracts a wrapped body payload without falling back", () => {
   assert.equal(typeof normalizeWorkflowIntentInput, "function");
 
-  const intent = normalizeWorkflowIntentInput?.(
+  const intent = normalizeWorkflowIntentInput(
     {
       body: {
         action: "rebalance",
-        tokenA: "cbeth",
+        tokenA: "weth",
         tokenB: "usdc",
         amount: "42",
         preferredChains: ["base-sepolia"],
@@ -117,7 +119,7 @@ test("normalizeWorkflowIntentInput extracts a wrapped body payload without falli
 
   assert.deepEqual(intent, {
     action: "rebalance",
-    tokenA: "CBETH",
+    tokenA: "WETH",
     tokenB: "USDC",
     amount: 42n,
     preferredChains: ["base-sepolia"],
@@ -126,19 +128,36 @@ test("normalizeWorkflowIntentInput extracts a wrapped body payload without falli
   });
 });
 
-test("normalizeWorkflowIntentInput prefers body over payload wrappers", () => {
-  const normalizeWorkflowIntentInput = (
-    intentLib as {
-      normalizeWorkflowIntentInput?: (input: unknown) => {
-        tokenA: string;
-        amount: bigint;
-      };
-    }
-  ).normalizeWorkflowIntentInput;
+test("normalizeWorkflowIntentInput parses JSON string bodies in wrapper fields", () => {
+  const intent = normalizeWorkflowIntentInput(
+    {
+      body: JSON.stringify({
+        tokenA: "weth",
+        tokenB: "usdc",
+        amount: "9",
+        preferredChains: ["base-sepolia"],
+        riskTolerance: "medium",
+        minYield: 5,
+      }),
+    },
+    { fallbackToDefault: true },
+  );
 
+  assert.deepEqual(intent, {
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: 9n,
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+  });
+});
+
+test("normalizeWorkflowIntentInput prefers body over payload wrappers", () => {
   assert.equal(typeof normalizeWorkflowIntentInput, "function");
 
-  const intent = normalizeWorkflowIntentInput?.({
+  const intent = normalizeWorkflowIntentInput({
     body: {
       tokenA: "weth",
       tokenB: "usdc",
@@ -162,15 +181,9 @@ test("normalizeWorkflowIntentInput prefers body over payload wrappers", () => {
 });
 
 test("toIntentPayload converts bigint amounts into JSON-safe strings", () => {
-  const toIntentPayload = (
-    intentLib as {
-      toIntentPayload?: (intent: ReturnType<typeof normalizeIntentInput>) => unknown;
-    }
-  ).toIntentPayload;
-
   assert.equal(typeof toIntentPayload, "function");
 
-  const payload = toIntentPayload?.(
+  const payload = toIntentPayload(
     normalizeIntentInput({
       tokenA: "WETH",
       tokenB: "USDC",

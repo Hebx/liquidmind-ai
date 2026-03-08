@@ -1,5 +1,6 @@
 export type RiskTolerance = "low" | "medium" | "high";
 export const SUPPORTED_EXECUTION_CHAIN = "base-sepolia";
+const SUPPORTED_ASSET_PAIR = ["USDC", "WETH"] as const;
 
 export interface LiquidityIntentPayload {
   action?: "rebalance";
@@ -45,6 +46,7 @@ export function normalizeIntentInput(
   const action = normalizeAction(candidate.action);
   const tokenA = normalizeRequiredToken(candidate.tokenA, "tokenA");
   const tokenB = normalizeRequiredToken(candidate.tokenB, "tokenB");
+  validateSupportedAssetPair(tokenA, tokenB);
   const amount = normalizeAmount(candidate.amount);
   const preferredChains = normalizePreferredChains(candidate.preferredChains);
   const riskTolerance = normalizeRiskTolerance(candidate.riskTolerance);
@@ -76,7 +78,7 @@ export function extractIntentPayload(input: unknown): unknown {
   const candidate = input as Record<string, unknown>;
   for (const key of ["body", "payload", "intent"] as const) {
     if (candidate[key] != null) {
-      return candidate[key];
+      return parseWrappedPayload(candidate[key]);
     }
   }
 
@@ -114,6 +116,23 @@ function resolveIntentCandidate(
   return input as Record<string, unknown>;
 }
 
+function parseWrappedPayload(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
 function normalizeAction(action: unknown): "rebalance" {
   if (action == null || action === "") {
     return "rebalance";
@@ -137,6 +156,14 @@ function normalizeRequiredToken(value: unknown, fieldName: string): string {
   }
 
   return normalized;
+}
+
+function validateSupportedAssetPair(tokenA: string, tokenB: string): void {
+  const normalizedPair = [tokenA, tokenB].sort();
+
+  if (normalizedPair.some((token, index) => token !== SUPPORTED_ASSET_PAIR[index])) {
+    throw new Error("Invalid intent: only the WETH/USDC Base Sepolia asset pair is supported");
+  }
 }
 
 function normalizeAmount(value: unknown): bigint {
