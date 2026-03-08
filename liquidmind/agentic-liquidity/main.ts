@@ -454,10 +454,23 @@ async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
 
   console.log(`  📅 Simulated rebalance schedule created (every hour, 5% threshold)`);
 
+  emitPreparedActionPayloads(state);
+
+  return {
+    ...state,
+    positionId
+  };
+}
+
+function emitPreparedActionPayloads(state: WorkflowState): void {
+  console.log("");
+  console.log("─── Prepared Action Payloads ─────────────────────────────────────────");
+  console.log("  These payloads are the current canonical workflow output.");
+  console.log("  Submission happens outside this package via operator/test flows.");
+
   // ─── Emit the CRE → Hook rebalance action payload ───────────────────────
   if (state.hookAction) {
     const { tickLower, tickUpper, coordinatorCalldata, coordinator } = state.hookAction;
-    console.log("");
     console.log("─── Rebalance Action Ready for On-Chain Submission ──────────────────");
     console.log(`  Coordinator     : ${coordinator}`);
     console.log(`  Tick Lower      : ${tickLower}`);
@@ -472,7 +485,6 @@ async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
   // ─── Emit the CRE → Hook dynamic fee update action payload ─────────────
   if (state.feeAction) {
     const { newFee, volatility, coordinatorCalldata, coordinator } = state.feeAction;
-    console.log("");
     console.log("─── Dynamic Fee Update Ready for On-Chain Submission ────────────────");
     console.log(`  Coordinator     : ${coordinator}`);
     console.log(`  Volatility      : ${volatility}% annualized`);
@@ -483,11 +495,6 @@ async function monitorPosition(state: WorkflowState): Promise<WorkflowState> {
     console.log(`FEE_ACTION_NEW_FEE=${newFee}`);
     console.log(`FEE_ACTION_VOLATILITY=${volatility}`);
   }
-
-  return {
-    ...state,
-    positionId
-  };
 }
 
 // Config type for workflow
@@ -496,8 +503,8 @@ interface Config {
   httpTrigger?: { path: string; method: string };
 }
 
-// Cron-triggered development/test workflow path.
-// This is the current simulation-oriented handler, not the final operator-facing architecture.
+// Cron-triggered canonical workflow path.
+// Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
 const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> => {
   // Default demo intent for cron-triggered development/test runs
   const intent: LiquidityIntent = {
@@ -512,11 +519,7 @@ const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =
 
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state, runtime);
-  state = await coordinateAgents(state);
-  state = await assessRisk(state);
-  state = await discoverOpportunity(state);
-  state = await executeWithPayment(state);
-  state = await monitorPosition(state);
+  emitPreparedActionPayloads(state);
 
   return state;
 };
@@ -532,7 +535,8 @@ export async function main() {
   await runner.run(initWorkflow);
 }
 
-// Workflow runner for local simulation (not exported - Javy rejects exported fns with params)
+// Workflow runner for local simulation only (not exported - Javy rejects exported fns with params)
+// This deeper flow is intentionally not part of the canonical onCronTrigger path.
 async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowState> {
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state); // no runtime → mock prices (local-only path)
