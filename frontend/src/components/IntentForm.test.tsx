@@ -234,3 +234,102 @@ test("shows sanitized route failures without implying execution", async (t) => {
   assert.ok(view.getByText(/prepared workflow output only/i));
   assert.equal(view.queryByText(/submitted on-chain/i), null);
 });
+
+test("ignores stale in-flight responses after the draft is cleared and replaced", async (t) => {
+  const teardownDom = installDom();
+  t.after(teardownDom);
+
+  const deferredResponse = createDeferred<Response>();
+  const previousFetch = global.fetch;
+
+  global.fetch = (async () => deferredResponse.promise) as typeof fetch;
+
+  t.after(() => {
+    global.fetch = previousFetch;
+  });
+
+  const view = render(<IntentForm />);
+
+  const user = userEvent.setup({
+    document: globalThis.document,
+  });
+  const textarea = view.getByRole("textbox");
+
+  await user.type(textarea, "rebalance weth/usdc");
+  await user.click(view.getByRole("button", { name: /prepare http intent/i }));
+
+  assert.ok(view.getByText(/preparing workflow output/i));
+
+  await user.click(view.getByRole("button", { name: /clear output/i }));
+  await waitFor(() => {
+    assert.ok(view.getByText(/ready to prepare/i));
+  });
+
+  await user.type(textarea, "new draft after clearing");
+  assert.equal((textarea as HTMLTextAreaElement).value, "new draft after clearing");
+
+  deferredResponse.resolve(
+    new Response(
+      JSON.stringify({
+        ok: true,
+        intent: {
+          action: "rebalance",
+        },
+        workflow: {
+          status: "prepared",
+          hookAction: {
+            actionId: "0x1".padEnd(66, "0"),
+          },
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      },
+    ),
+  );
+
+  await waitFor(() => {
+    assert.ok(view.getByDisplayValue("new draft after clearing"));
+  });
+
+  assert.ok(view.getByText(/ready to prepare/i));
+  assert.equal(view.queryByText(/returned successfully/i), null);
+  assert.equal(view.queryByText(/preparation failed/i), null);
+});
+
+test("shows a response parse error when the server replies with unreadable JSON", async (t) => {
+  const teardownDom = installDom();
+  t.after(teardownDom);
+
+  const previousFetch = global.fetch;
+  global.fetch = (async () =>
+    new Response("not-json", {
+      status: 502,
+      headers: {
+        "content-type": "application/json",
+      },
+    })) as typeof fetch;
+
+  t.after(() => {
+    global.fetch = previousFetch;
+  });
+
+  const view = render(<IntentForm />);
+
+  const user = userEvent.setup({
+    document: globalThis.document,
+  });
+  await user.type(view.getByRole("textbox"), "rebalance weth/usdc");
+  await user.click(view.getByRole("button", { name: /prepare http intent/i }));
+
+  await waitFor(() => {
+    assert.ok(view.getByText(/preparation failed/i));
+  });
+
+  assert.ok(view.getByText(/response_parse_error/i));
+  assert.ok(view.getByText(/intent route returned an unreadable response\./i));
+  assert.equal(view.queryByText(/before the server returned a response/i), null);
+});

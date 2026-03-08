@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import IntentExecutionStatus from '@/components/IntentExecutionStatus';
 
 interface IntentWorkflowWarning {
@@ -35,6 +35,17 @@ export default function IntentForm() {
   const [status, setStatus] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
   const [result, setResult] = useState<IntentRouteSuccessResponse | null>(null);
   const [error, setError] = useState<IntentRouteErrorResponse['error'] | null>(null);
+  const latestRequestIdRef = useRef(0);
+
+  const clearExecutionState = (invalidateInFlightRequest = false) => {
+    if (invalidateInFlightRequest) {
+      latestRequestIdRef.current += 1;
+    }
+
+    setStatus('idle');
+    setResult(null);
+    setError(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +54,16 @@ export default function IntentForm() {
       return;
     }
 
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
     setStatus('pending');
     setResult(null);
     setError(null);
 
+    let response: Response;
+
     try {
-      const response = await fetch('/api/intent', {
+      response = await fetch('/api/intent', {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -57,36 +72,71 @@ export default function IntentForm() {
           rawIntent: intent,
         }),
       });
-      const body = (await response.json()) as IntentRouteResponse;
-
-      if (!response.ok || !body.ok) {
-        const routeError = body.ok
-          ? {
-              code: 'INTERNAL_ERROR',
-              message: 'Intent workflow preparation failed.',
-            }
-          : body.error;
-        setError(routeError);
-        setStatus('error');
+    } catch {
+      if (requestId !== latestRequestIdRef.current) {
         return;
       }
 
-      setResult(body);
-      setStatus('success');
-    } catch {
       setError({
         code: 'NETWORK_ERROR',
         message: 'Intent preparation request failed before the server returned a response.',
       });
       setStatus('error');
+      return;
     }
+
+    if (requestId !== latestRequestIdRef.current) {
+      return;
+    }
+
+    let body: IntentRouteResponse;
+
+    try {
+      body = (await response.json()) as IntentRouteResponse;
+    } catch {
+      if (requestId !== latestRequestIdRef.current) {
+        return;
+      }
+
+      setError({
+        code: 'RESPONSE_PARSE_ERROR',
+        message: 'Intent route returned an unreadable response.',
+      });
+      setStatus('error');
+      return;
+    }
+
+    if (requestId !== latestRequestIdRef.current) {
+      return;
+    }
+
+    if (!response.ok || !body.ok) {
+      const routeError = body.ok
+        ? {
+            code: 'INTERNAL_ERROR',
+            message: 'Intent workflow preparation failed.',
+          }
+        : body.error;
+      setError(routeError);
+      setStatus('error');
+      return;
+    }
+
+    setResult(body);
+    setStatus('success');
   };
 
   const handleReset = () => {
     setIntent('');
-    setStatus('idle');
-    setResult(null);
-    setError(null);
+    clearExecutionState(true);
+  };
+
+  const handleIntentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setIntent(e.target.value);
+
+    if (status !== 'idle' || result !== null || error !== null) {
+      clearExecutionState(true);
+    }
   };
 
   return (
@@ -102,7 +152,7 @@ export default function IntentForm() {
             className="w-full h-36 bg-bg-primary border-[var(--border-thick)] border-lime p-4 text-text-primary font-mono text-sm placeholder:text-text-muted focus:outline-none focus:ring-0"
             placeholder="Describe the intent to parse and prepare, for example: rebalance the Base Sepolia WETH/USDC position using medium risk settings."
             value={intent}
-            onChange={(e) => setIntent(e.target.value)}
+            onChange={handleIntentChange}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
