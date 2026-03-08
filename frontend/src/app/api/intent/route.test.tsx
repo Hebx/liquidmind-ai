@@ -3,7 +3,12 @@ import test from "node:test";
 
 import { IntentParserError } from "@/lib/intent-parser";
 
-import { createIntentErrorResponse, handleIntentPost, POST } from "./route.js";
+import {
+  createIntentErrorResponse,
+  DEFAULT_INTENT_ROUTE_DEPENDENCIES,
+  handleIntentPost,
+  POST,
+} from "./route.js";
 
 test("createIntentErrorResponse preserves specific client messages for validation failures", () => {
   const response = createIntentErrorResponse(
@@ -73,6 +78,83 @@ test("POST returns BAD_REQUEST for malformed JSON bodies", async () => {
   });
 });
 
+test("POST uses the default intent route dependencies", async () => {
+  const previousDependencies = {
+    ...DEFAULT_INTENT_ROUTE_DEPENDENCIES,
+  };
+
+  DEFAULT_INTENT_ROUTE_DEPENDENCIES.parseIntent = async () => ({
+    action: "rebalance",
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: "1000000",
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium",
+    minYield: 5,
+  });
+  DEFAULT_INTENT_ROUTE_DEPENDENCIES.executeWorkflow = async (intent) => ({
+    status: "prepared",
+    intent,
+    hookAction: {
+      actionId: "0x2".padEnd(66, "0") as `0x${string}`,
+      coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+      coordinatorCalldata: "0xfeedface",
+      tickLower: -70000,
+      tickUpper: -68000,
+    },
+  });
+
+  try {
+    const response = await POST(
+      new Request("http://localhost/api/intent", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      ok: true,
+      intent: {
+        action: "rebalance",
+        tokenA: "WETH",
+        tokenB: "USDC",
+        amount: "1000000",
+        preferredChains: ["base-sepolia"],
+        riskTolerance: "medium",
+        minYield: 5,
+      },
+      workflow: {
+        status: "prepared",
+        intent: {
+          action: "rebalance",
+          tokenA: "WETH",
+          tokenB: "USDC",
+          amount: "1000000",
+          preferredChains: ["base-sepolia"],
+          riskTolerance: "medium",
+          minYield: 5,
+        },
+        hookAction: {
+          actionId: "0x2".padEnd(66, "0"),
+          coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+          coordinatorCalldata: "0xfeedface",
+          tickLower: -70000,
+          tickUpper: -68000,
+        },
+      },
+    });
+  } finally {
+    DEFAULT_INTENT_ROUTE_DEPENDENCIES.parseIntent = previousDependencies.parseIntent;
+    DEFAULT_INTENT_ROUTE_DEPENDENCIES.executeWorkflow = previousDependencies.executeWorkflow;
+  }
+});
+
 test("handleIntentPost returns prepared canonical workflow output instead of only echoing parsed intent", async () => {
   const parsedIntent = {
     action: "rebalance" as const,
@@ -133,32 +215,44 @@ test("handleIntentPost returns an honest sanitized error when canonical workflow
     minYield: 5,
   };
 
-  const response = await handleIntentPost(
-    new Request("http://localhost/api/intent", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
-      }),
-    }),
-    {
-      parseIntent: async () => parsedIntent,
-      executeWorkflow: async () => {
-        throw new Error("workflow boom");
-      },
-    },
-  );
+  const previousConsoleError = console.error;
+  const loggedErrors: unknown[] = [];
 
-  assert.equal(response.status, 500);
-  assert.deepEqual(await response.json(), {
-    ok: false,
-    error: {
-      code: "INTERNAL_ERROR",
-      message: "Intent workflow preparation failed.",
-    },
-  });
+  console.error = (...args: unknown[]) => {
+    loggedErrors.push(args);
+  };
+
+  try {
+    const response = await handleIntentPost(
+      new Request("http://localhost/api/intent", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+        }),
+      }),
+      {
+        parseIntent: async () => parsedIntent,
+        executeWorkflow: async () => {
+          throw new Error("workflow boom");
+        },
+      },
+    );
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Intent workflow preparation failed.",
+      },
+    });
+    assert.equal(loggedErrors.length, 1);
+  } finally {
+    console.error = previousConsoleError;
+  }
 });
 
 test("POST fails honestly when live canonical market data is unavailable", async () => {

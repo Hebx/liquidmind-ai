@@ -14,7 +14,7 @@ interface IntentRouteDependencies {
   executeWorkflow: typeof executeCanonicalHttpWorkflow;
 }
 
-const DEFAULT_INTENT_ROUTE_DEPENDENCIES: IntentRouteDependencies = {
+export const DEFAULT_INTENT_ROUTE_DEPENDENCIES: IntentRouteDependencies = {
   parseIntent: parseIntentWithModel,
   executeWorkflow: executeCanonicalHttpWorkflow,
 };
@@ -61,6 +61,10 @@ export async function handleIntentPost(
           status: 400,
         },
       );
+    }
+
+    if (parsedIntentSuccessfully) {
+      logUnexpectedWorkflowRouteError(error);
     }
 
     return NextResponse.json(
@@ -136,5 +140,9 @@ function logIntentRouteError(error: IntentParserError): void {
     return;
   }
 
+  console.error("[api/intent]", error);
+}
+
+function logUnexpectedWorkflowRouteError(error: unknown): void {
   console.error("[api/intent]", error);
 }
