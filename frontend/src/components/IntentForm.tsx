@@ -54,7 +54,7 @@ export default function IntentForm() {
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          rawIntent: intent.trim(),
+          rawIntent: intent,
         }),
       });
       const body = (await response.json()) as IntentRouteResponse;

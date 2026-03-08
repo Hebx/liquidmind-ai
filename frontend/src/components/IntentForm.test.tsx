@@ -111,9 +111,10 @@ test("submits the raw intent, shows pending state, and renders prepared workflow
     document: globalThis.document,
   });
   const textarea = view.getByRole("textbox");
+  const rawIntent = "  rebalance the Base Sepolia WETH/USDC position using medium risk settings  ";
   await user.type(
     textarea,
-    "rebalance the Base Sepolia WETH/USDC position using medium risk settings",
+    rawIntent,
   );
   await user.click(view.getByRole("button", { name: /prepare http intent/i }));
 
@@ -121,9 +122,12 @@ test("submits the raw intent, shows pending state, and renders prepared workflow
   assert.equal(fetchCalls[0]?.input, "/api/intent");
   assert.equal(fetchCalls[0]?.init?.method, "POST");
   assert.equal(fetchCalls[0]?.init?.headers?.["content-type"], "application/json");
-  assert.equal(fetchCalls[0]?.init?.body, JSON.stringify({
-    rawIntent: "rebalance the Base Sepolia WETH/USDC position using medium risk settings",
-  }));
+  assert.equal(
+    fetchCalls[0]?.init?.body,
+    JSON.stringify({
+      rawIntent,
+    }),
+  );
 
   assert.ok(view.getByText(/preparing workflow output/i));
 
