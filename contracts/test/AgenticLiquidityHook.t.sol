@@ -16,6 +16,8 @@ import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 contract AgenticLiquidityHookTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
 
+    event DefenseStateTransitioned(PoolId indexed poolId, uint8 previousState, uint8 newState);
+
     AgenticLiquidityHook public hook;
     MockERC20 public token0;
     MockERC20 public token1;
@@ -133,6 +135,81 @@ contract AgenticLiquidityHookTest is Test, Deployers {
         AgenticLiquidityHook.LiquidityPosition memory pos = hook.getPosition(poolId);
         assertEq(pos.tickLower % 60, 0, "lower tick not snapped");
         assertEq(pos.tickUpper % 60, 0, "upper tick not snapped");
+    }
+
+    function test_DefenseStateDefaultsToNormalOnInitialize() public view {
+        PoolId poolId = poolKey.toId();
+        assertEq(
+            uint8(hook.getDefenseState(poolId)),
+            uint8(AgenticLiquidityHook.DefenseState.NORMAL)
+        );
+    }
+
+    function test_GetDefenseState_RevertIfPoolUninitialized() public {
+        PoolId uninitializedPoolId = PoolId.wrap(bytes32(uint256(999)));
+        vm.expectRevert(
+            abi.encodeWithSelector(AgenticLiquidityHook.PoolNotInitialized.selector, uninitializedPoolId)
+        );
+        hook.getDefenseState(uninitializedPoolId);
+    }
+
+    function test_TransitionDefenseState_AllowsValidPath() public {
+        PoolId poolId = poolKey.toId();
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.WARNING));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.DEFENSE);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.DEFENSE));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.RECOVERY);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.RECOVERY));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.NORMAL);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.NORMAL));
+    }
+
+    function test_TransitionDefenseState_RevertOnInvalidTransition() public {
+        PoolId poolId = poolKey.toId();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AgenticLiquidityHook.InvalidDefenseStateTransition.selector,
+                AgenticLiquidityHook.DefenseState.NORMAL,
+                AgenticLiquidityHook.DefenseState.DEFENSE
+            )
+        );
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.DEFENSE);
+    }
+
+    function test_TransitionDefenseState_EmitsEventOnSuccess() public {
+        PoolId poolId = poolKey.toId();
+        vm.expectEmit(true, false, false, true);
+        emit DefenseStateTransitioned(
+            poolId,
+            uint8(AgenticLiquidityHook.DefenseState.NORMAL),
+            uint8(AgenticLiquidityHook.DefenseState.WARNING)
+        );
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+    }
+
+    function test_DefenseStateAPIsRemainValidAfterZeroBaseFeeConfigUpdate() public {
+        PoolId poolId = poolKey.toId();
+        hook.setPoolConfig(
+            poolId,
+            AgenticLiquidityHook.PoolConfig({
+                baseFee: 0,
+                maxFee: 10000,
+                minFee: 100,
+                rebalanceThreshold: 200,
+                autoRebalance: true,
+                agentOnlyLPs: false
+            })
+        );
+
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.NORMAL));
+
+        hook.transitionDefenseState(poolId, AgenticLiquidityHook.DefenseState.WARNING);
+        assertEq(uint8(hook.getDefenseState(poolId)), uint8(AgenticLiquidityHook.DefenseState.WARNING));
     }
 
     // ============ Dynamic Fee Tests ============

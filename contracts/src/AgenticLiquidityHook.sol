@@ -37,6 +37,8 @@ contract AgenticLiquidityHook is BaseHook {
     error FeeOutOfBounds(uint24 fee, uint24 minFee, uint24 maxFee);
     error AgentOnlyPool(address caller);
     error InvalidTickRange(int24 lower, int24 upper);
+    error InvalidDefenseStateTransition(DefenseState currentState, DefenseState nextState);
+    error PoolNotInitialized(PoolId poolId);
 
     // ============ Events ============
     event LiquidityRebalanced(
@@ -58,6 +60,11 @@ contract AgenticLiquidityHook is BaseHook {
         int24 suggestedLower,
         int24 suggestedUpper
     );
+    event DefenseStateTransitioned(
+        PoolId indexed poolId,
+        DefenseState previousState,
+        DefenseState newState
+    );
 
     // ============ Structs ============
     struct PoolConfig {
@@ -74,6 +81,13 @@ contract AgenticLiquidityHook is BaseHook {
         int24 tickUpper;
         uint128 liquidity;
         uint256 lastRebalance;
+    }
+
+    enum DefenseState {
+        NORMAL,
+        WARNING,
+        DEFENSE,
+        RECOVERY
     }
 
     // ============ EMA Constants ============
@@ -106,6 +120,8 @@ contract AgenticLiquidityHook is BaseHook {
 
     address public owner;
     address public agentCoordinator;
+    mapping(PoolId => DefenseState) private poolDefenseStates;
+    mapping(PoolId => bool) private poolInitialized;
 
     // ============ Modifiers ============
     modifier onlyOwner() {
@@ -157,6 +173,9 @@ contract AgenticLiquidityHook is BaseHook {
             liquidity:     0,
             lastRebalance: block.timestamp
         });
+
+        poolInitialized[poolId] = true;
+        poolDefenseStates[poolId] = DefenseState.NORMAL;
 
         return this.afterInitialize.selector;
     }
@@ -456,6 +475,18 @@ contract AgenticLiquidityHook is BaseHook {
         poolConfigs[poolId].agentOnlyLPs = enabled;
     }
 
+    function transitionDefenseState(PoolId poolId, DefenseState nextState) external onlyOwner {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+
+        DefenseState currentState = poolDefenseStates[poolId];
+        if (!_isValidDefenseTransition(currentState, nextState)) {
+            revert InvalidDefenseStateTransition(currentState, nextState);
+        }
+
+        poolDefenseStates[poolId] = nextState;
+        emit DefenseStateTransitioned(poolId, currentState, nextState);
+    }
+
     function transferOwnership(address newOwner) external onlyOwner {
         owner = newOwner;
     }
@@ -480,5 +511,28 @@ contract AgenticLiquidityHook is BaseHook {
 
     function needsRebalance(PoolId poolId) external view returns (bool) {
         return _shouldRebalance(poolId, currentTick[poolId]);
+    }
+
+    function getDefenseState(PoolId poolId) external view returns (DefenseState) {
+        if (!_isPoolInitialized(poolId)) revert PoolNotInitialized(poolId);
+        return poolDefenseStates[poolId];
+    }
+
+    function _isPoolInitialized(PoolId poolId) internal view returns (bool) {
+        return poolInitialized[poolId];
+    }
+
+    function _isValidDefenseTransition(DefenseState currentState, DefenseState nextState)
+        internal
+        pure
+        returns (bool)
+    {
+        if (currentState == DefenseState.NORMAL) return nextState == DefenseState.WARNING;
+        if (currentState == DefenseState.WARNING) {
+            return nextState == DefenseState.NORMAL || nextState == DefenseState.DEFENSE;
+        }
+        if (currentState == DefenseState.DEFENSE) return nextState == DefenseState.RECOVERY;
+        if (currentState == DefenseState.RECOVERY) return nextState == DefenseState.NORMAL;
+        return false;
     }
 }
