@@ -86,6 +86,38 @@ test("default route workflow dependency points at the shared canonical HTTP entr
   );
 });
 
+test("executeCanonicalHttpWorkflow exposes an explicit warning when fee sidecar preparation degrades", async () => {
+  const workflow = await executeCanonicalHttpWorkflow(
+    {
+      action: "rebalance",
+      tokenA: "WETH",
+      tokenB: "USDC",
+      amount: "1000000",
+      preferredChains: ["base-sepolia"],
+      riskTolerance: "medium",
+      minYield: 5,
+    },
+    {
+      marketDataReader: {
+        getPrice: async (tokenAddressOrSymbol: string) =>
+          tokenAddressOrSymbol.toUpperCase() === "WETH" ? 2000 : 1,
+        getVolatility: async () => {
+          throw new Error("volatility unavailable");
+        },
+      },
+    },
+  );
+
+  assert.equal(workflow.status, "prepared");
+  assert.equal(workflow.feeAction, undefined);
+  assert.deepEqual(workflow.warnings, [
+    {
+      code: "FEE_ACTION_UNAVAILABLE",
+      message: "Volatility analysis unavailable. Fee update action was not prepared.",
+    },
+  ]);
+});
+
 test("POST uses the default intent route dependencies", async () => {
   const previousDependencies = {
     ...DEFAULT_INTENT_ROUTE_DEPENDENCIES,

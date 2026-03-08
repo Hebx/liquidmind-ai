@@ -18,11 +18,17 @@ export interface PreparedFeeAction {
   coordinator: Hex;
 }
 
+export interface CanonicalWorkflowWarning {
+  code: "FEE_ACTION_UNAVAILABLE";
+  message: string;
+}
+
 export interface CanonicalIntentWorkflowResult {
   status: "prepared";
   intent: LiquidityIntentPayload;
   hookAction: PreparedHookAction;
   feeAction?: PreparedFeeAction;
+  warnings?: CanonicalWorkflowWarning[];
 }
 
 export interface CanonicalPreparationResult {
@@ -100,13 +106,20 @@ export function prepareCanonicalActions(
 export function toCanonicalIntentWorkflowResult(
   intent: LiquidityIntent,
   preparation: CanonicalPreparationResult,
+  warnings?: CanonicalWorkflowWarning[],
 ): CanonicalIntentWorkflowResult {
-  return {
+  const result: CanonicalIntentWorkflowResult = {
     status: "prepared",
     intent: toIntentPayload(intent),
     hookAction: preparation.hookAction,
     feeAction: preparation.feeAction,
   };
+
+  if (warnings && warnings.length > 0) {
+    result.warnings = warnings;
+  }
+
+  return result;
 }
 
 function createActionId(timestampMs: number): Hex {

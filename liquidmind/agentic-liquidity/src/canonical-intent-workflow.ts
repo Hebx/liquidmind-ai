@@ -4,9 +4,12 @@ import {
 import {
   prepareCanonicalActions,
   toCanonicalIntentWorkflowResult,
+  type CanonicalPreparationResult,
   type CanonicalIntentWorkflowResult,
+  type CanonicalWorkflowWarning,
 } from "./canonical-preparation";
 import { RpcMarketDataReader } from "./rpc-market-data";
+import type { LiquidityIntent } from "./lib/intent";
 
 export interface CanonicalMarketDataReader {
   getPrice(tokenAddressOrSymbol: string): Promise<number>;
@@ -16,6 +19,52 @@ export interface CanonicalMarketDataReader {
 interface CanonicalIntentWorkflowOptions {
   env?: NodeJS.ProcessEnv;
   marketDataReader?: CanonicalMarketDataReader;
+}
+
+export interface CanonicalHttpPreparationResult {
+  intent: LiquidityIntent;
+  workflow: CanonicalIntentWorkflowResult;
+  diagnostics: CanonicalPreparationResult["diagnostics"];
+}
+
+const VOLATILITY_WARNING: CanonicalWorkflowWarning = {
+  code: "FEE_ACTION_UNAVAILABLE",
+  message: "Volatility analysis unavailable. Fee update action was not prepared.",
+};
+
+export async function prepareCanonicalHttpWorkflow(
+  intentInput: unknown,
+  options: CanonicalIntentWorkflowOptions = {},
+): Promise<CanonicalHttpPreparationResult> {
+  const intent = normalizeWorkflowIntentInput(intentInput);
+  const marketDataReader =
+    options.marketDataReader ?? new RpcMarketDataReader({ env: options.env });
+  const [priceA, priceB] = await Promise.all([
+    marketDataReader.getPrice(intent.tokenA),
+    marketDataReader.getPrice(intent.tokenB),
+  ]);
+
+  const warnings: CanonicalWorkflowWarning[] = [];
+  let volatility: number | undefined;
+  try {
+    const ethSymbol = intent.tokenA.toUpperCase().includes("ETH") ? intent.tokenA : intent.tokenB;
+    const result = await marketDataReader.getVolatility(ethSymbol, 5);
+    volatility = result.volatility;
+  } catch {
+    warnings.push(VOLATILITY_WARNING);
+  }
+
+  const preparation = prepareCanonicalActions(intent, {
+    priceA,
+    priceB,
+    volatility,
+  });
+
+  return {
+    intent,
+    diagnostics: preparation.diagnostics,
+    workflow: toCanonicalIntentWorkflowResult(intent, preparation, warnings),
+  };
 }
 
 /**
@@ -28,31 +77,8 @@ export async function executeCanonicalHttpWorkflow(
   intentInput: unknown,
   options: CanonicalIntentWorkflowOptions = {},
 ): Promise<CanonicalIntentWorkflowResult> {
-  const intent = normalizeWorkflowIntentInput(intentInput);
-  const marketDataReader =
-    options.marketDataReader ?? new RpcMarketDataReader({ env: options.env });
-  const [priceA, priceB] = await Promise.all([
-    marketDataReader.getPrice(intent.tokenA),
-    marketDataReader.getPrice(intent.tokenB),
-  ]);
-
-  let volatility: number | undefined;
-  try {
-    const ethSymbol = intent.tokenA.toUpperCase().includes("ETH") ? intent.tokenA : intent.tokenB;
-    const result = await marketDataReader.getVolatility(ethSymbol, 5);
-    volatility = result.volatility;
-  } catch {
-    volatility = undefined;
-  }
-
-  return toCanonicalIntentWorkflowResult(
-    intent,
-    prepareCanonicalActions(intent, {
-      priceA,
-      priceB,
-      volatility,
-    }),
-  );
+  const preparation = await prepareCanonicalHttpWorkflow(intentInput, options);
+  return preparation.workflow;
 }
 
 export const executeCanonicalIntentWorkflow = executeCanonicalHttpWorkflow;

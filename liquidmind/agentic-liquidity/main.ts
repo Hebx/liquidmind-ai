@@ -15,12 +15,14 @@
 
 import { cre, handler, httpTrigger, type Runtime, Runner } from "@chainlink/cre-sdk";
 import {
-  CONTRACTS,
-  prepareCanonicalActions,
+  type CanonicalWorkflowWarning,
   type PreparedFeeAction,
   type PreparedHookAction,
 } from "./src/canonical-preparation";
-import { executeCanonicalHttpWorkflow } from "./src/canonical-intent-workflow.js";
+import {
+  executeCanonicalHttpWorkflow,
+  prepareCanonicalHttpWorkflow,
+} from "./src/canonical-intent-workflow.js";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
 import {
   DEFAULT_DEVELOPMENT_INTENT,
@@ -56,6 +58,7 @@ interface WorkflowState {
   positionId?: string;
   hookAction?: PreparedHookAction;
   feeAction?: PreparedFeeAction;
+  warnings?: CanonicalWorkflowWarning[];
 }
 
 interface TransportWorkflowState extends Omit<WorkflowState, "intent"> {
@@ -65,73 +68,62 @@ interface TransportWorkflowState extends Omit<WorkflowState, "intent"> {
 // Price feed utility instance
 const priceFeed = new PriceFeedUtil();
 
+function createCanonicalMarketDataReader(runtime?: Runtime<Config>) {
+  return {
+    getPrice: (tokenAddressOrSymbol: string) => priceFeed.getPrice(tokenAddressOrSymbol, runtime),
+    getVolatility: (symbol: string, numRounds: number = 5) => {
+      if (!runtime) {
+        throw new Error("Volatility reads require CRE runtime.");
+      }
+
+      return priceFeed.getVolatility(symbol, runtime, numRounds);
+    },
+  };
+}
+
 // Step 1: Intent Analysis
 async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): Promise<WorkflowState> {
   console.log("🔍 Analyzing user intent...");
 
-  const intent = state.intent;
-
-  if (!intent.tokenA || !intent.tokenB) throw new Error("Invalid intent: missing token pair");
-  if (intent.amount <= 0n) throw new Error("Invalid intent: amount must be positive");
-
-  // Fetch live prices from Chainlink feeds on Base Sepolia via CRE EVMClient
-  const [priceA, priceB] = await Promise.all([
-    priceFeed.getPrice(intent.tokenA, runtime),
-    priceFeed.getPrice(intent.tokenB, runtime),
-  ]);
-
-  console.log(`  Token A (${intent.tokenA}) Price: $${priceA}`);
-  console.log(`  Token B (${intent.tokenB}) Price: $${priceB}`);
-  console.log(`  Action: ${intent.action}`);
-  console.log(`  Risk Tolerance: ${intent.riskTolerance}`);
-
-  // ─── Milestone 2: Live Volatility → Dynamic Fee ──────────────────────────
-  let volatility: number | undefined;
-  if (runtime) {
-    try {
-      const ethSymbol = intent.tokenA.toUpperCase().includes("ETH") ? intent.tokenA : intent.tokenB;
-      const volResult = await priceFeed.getVolatility(ethSymbol, runtime, 5);
-      volatility = volResult.volatility;
-
-      console.log(`  ─── Volatility Oracle ───────────────────────────`);
-      console.log(`  VOLATILITY_ANNUALIZED: ${volResult.volatility}%`);
-      console.log(`  VOLATILITY_ROUNDS_READ: ${volResult.roundsRead}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.log(`  ⚠️  Volatility measurement failed: ${msg} — skipping fee update`);
-    }
-  }
-
-  const preparation = prepareCanonicalActions(intent, {
-    priceA,
-    priceB,
-    volatility,
+  const { intent, workflow, diagnostics } = await prepareCanonicalHttpWorkflow(state.intent, {
+    marketDataReader: createCanonicalMarketDataReader(runtime),
   });
 
-  console.log(`  ETH/USD price  : $${preparation.diagnostics.ethUsdPrice.toFixed(2)}`);
-  console.log(`  Approx tick    : ${preparation.diagnostics.currentTick}`);
+  console.log(`  Token A (${intent.tokenA}) Price: $${diagnostics.priceA}`);
+  console.log(`  Token B (${intent.tokenB}) Price: $${diagnostics.priceB}`);
+  console.log(`  Action: ${intent.action}`);
+  console.log(`  Risk Tolerance: ${intent.riskTolerance}`);
+  console.log(`  ETH/USD price  : $${diagnostics.ethUsdPrice.toFixed(2)}`);
+  console.log(`  Approx tick    : ${diagnostics.currentTick}`);
   console.log(
-    `  Optimal range  : [${preparation.hookAction.tickLower}, ${preparation.hookAction.tickUpper}]  ` +
-      `(±${preparation.diagnostics.halfRange} ticks)`,
+    `  Optimal range  : [${workflow.hookAction.tickLower}, ${workflow.hookAction.tickUpper}]  ` +
+      `(±${diagnostics.halfRange} ticks)`,
   );
-  console.log(`  ACTION_CALLDATA_COORDINATOR: ${CONTRACTS.COORDINATOR}`);
-  console.log(`  ACTION_CALLDATA: ${preparation.hookAction.coordinatorCalldata}`);
-  console.log(`  HOOK_TICK_LOWER: ${preparation.hookAction.tickLower}`);
-  console.log(`  HOOK_TICK_UPPER: ${preparation.hookAction.tickUpper}`);
+  console.log(`  ACTION_CALLDATA_COORDINATOR: ${workflow.hookAction.coordinator}`);
+  console.log(`  ACTION_CALLDATA: ${workflow.hookAction.coordinatorCalldata}`);
+  console.log(`  HOOK_TICK_LOWER: ${workflow.hookAction.tickLower}`);
+  console.log(`  HOOK_TICK_UPPER: ${workflow.hookAction.tickUpper}`);
 
-  if (preparation.feeAction) {
+  if (workflow.feeAction) {
     console.log(
-      `  OPTIMAL_FEE: ${preparation.feeAction.newFee} ` +
-        `(${((preparation.feeAction.newFee / 10000) * 100).toFixed(2)}%)`,
+      `  OPTIMAL_FEE: ${workflow.feeAction.newFee} ` +
+        `(${((workflow.feeAction.newFee / 10000) * 100).toFixed(2)}%)`,
     );
-    console.log(`  FEE_ACTION_CALLDATA: ${preparation.feeAction.coordinatorCalldata}`);
+    console.log(`  FEE_ACTION_CALLDATA: ${workflow.feeAction.coordinatorCalldata}`);
+  }
+
+  if (workflow.warnings) {
+    for (const warning of workflow.warnings) {
+      console.log(`  ⚠️  ${warning.message}`);
+    }
   }
 
   return {
     ...state,
     intent,
-    hookAction: preparation.hookAction,
-    feeAction: preparation.feeAction,
+    hookAction: workflow.hookAction,
+    feeAction: workflow.feeAction,
+    warnings: workflow.warnings,
   };
 }
 
@@ -288,6 +280,12 @@ function emitPreparedActionPayloads(state: WorkflowState): void {
   console.log("  These payloads are the current canonical workflow output.");
   console.log("  Submission happens outside this package via operator/test flows.");
 
+  if (state.warnings) {
+    for (const warning of state.warnings) {
+      console.log(`  WARNING: ${warning.code} - ${warning.message}`);
+    }
+  }
+
   // ─── Emit the CRE → Hook rebalance action payload ───────────────────────
   if (state.hookAction) {
     const { tickLower, tickUpper, coordinatorCalldata, coordinator } = state.hookAction;
@@ -354,11 +352,7 @@ const onHttpTrigger = async (
   request: unknown,
 ): Promise<TransportWorkflowState> =>
   executeCanonicalHttpWorkflow(request, {
-    marketDataReader: {
-      getPrice: (tokenAddressOrSymbol: string) => priceFeed.getPrice(tokenAddressOrSymbol, runtime),
-      getVolatility: (symbol: string, numRounds: number = 5) =>
-        priceFeed.getVolatility(symbol, runtime, numRounds),
-    },
+    marketDataReader: createCanonicalMarketDataReader(runtime),
   });
 
 // Cron-triggered development fallback path.
