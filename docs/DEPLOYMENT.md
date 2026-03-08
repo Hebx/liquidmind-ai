@@ -85,7 +85,7 @@ npm install
 npm run validate:real
 ```
 
-Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still compiles for CRE execution.
+Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still compiles for CRE execution. The canonical output is a `rebalance` payload, with an optional `updateFee` sidecar emitted when live volatility analysis succeeds.
 
 If you need a compiled workflow artifact, run:
 
@@ -109,7 +109,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. With that variable set, `e2e-live.sh` can prove the current submission bridge for rebalance or `updateFee` actions. Without it, the script is only partial evidence and does not prove on-chain submission.
+`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. With that variable set, `e2e-live.sh` can prove the current submission bridge for the canonical `rebalance` action and the optional `updateFee` sidecar action. Without it, the script is only partial evidence and does not prove on-chain submission.
 
 ## Next Milestone
 

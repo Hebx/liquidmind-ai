@@ -3,11 +3,12 @@
  *
  * Current milestone workflow for:
  * 1. Interpreting liquidity intent inputs
- * 2. Computing fee and range guidance from market data
- * 3. Preparing action payloads for Base Sepolia coordinator execution
+ * 2. Computing tick and fee guidance from market data
+ * 3. Preparing a canonical rebalance payload for Base Sepolia coordinator execution
  *
  * Notes:
  * - Real Chainlink price and historical round reads are part of the live path.
+ * - The workflow may also emit an updateFee sidecar action from live volatility analysis.
  * - HTTP-triggered intent ingestion is the next milestone.
  * - A2A, x402, and broader cross-chain execution remain exploratory or deferred.
  */

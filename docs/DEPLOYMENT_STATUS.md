@@ -31,7 +31,7 @@
 
 - Real Chainlink price reads are working through `liquidmind/agentic-liquidity`.
 - Historical round reads for volatility are working through `liquidmind/agentic-liquidity`.
-- Rebalance and `updateFee` action payloads have validation evidence through simulation and testnet flows.
+- Canonical `rebalance` payloads and volatility-driven `updateFee` sidecar payloads have validation evidence through simulation and testnet flows.
 - The hook and coordinator behavior are validated against deployed Base Sepolia contracts.
 
 ### On-chain hook state
@@ -60,5 +60,5 @@ These items are the active next step, not something this status page claims is a
 ## Test Evidence
 
 - **Fork tests:** 16/16 passing
-- **E2E suite:** passing when `AGENT_PRIVATE_KEY` is set, which provides full submission evidence for rebalance and `updateFee`; without that key, the script is only partial evidence
+- **E2E suite:** passing when `AGENT_PRIVATE_KEY` is set, which provides full submission evidence for the canonical `rebalance` action and the optional `updateFee` sidecar; without that key, the script is only partial evidence
 - **Testnet flow:** confirmed on-chain transactions recorded on Base Sepolia

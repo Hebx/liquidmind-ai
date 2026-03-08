@@ -7,7 +7,7 @@
 [![Base Sepolia](https://img.shields.io/badge/Network-Base%20Sepolia-0052FF)](https://sepolia.basescan.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-LiquidMind currently has live Base Sepolia contracts plus a canonical CRE workflow package at `liquidmind/agentic-liquidity` that reads real Chainlink data and computes rebalance or fee-update actions. The next milestone is to trigger that workflow over HTTP and carry intent payloads through to on-chain execution.
+LiquidMind currently has live Base Sepolia contracts plus a canonical CRE workflow package at `liquidmind/agentic-liquidity` that reads real Chainlink data, prepares a canonical `rebalance` action, and may emit an `updateFee` sidecar action from live volatility analysis. The next milestone is to trigger that workflow over HTTP and carry intent payloads through to on-chain execution.
 
 ---
 
@@ -18,7 +18,7 @@ LiquidMind currently has live Base Sepolia contracts plus a canonical CRE workfl
 - `AgenticLiquidityHook` and `LiquidMindCoordinator` are deployed on Base Sepolia.
 - The hook updates EMA volatility, overrides swap fees, and signals rebalance conditions on-chain.
 - The CRE workflow in `liquidmind/agentic-liquidity` performs real Chainlink price and historical round reads.
-- Local and testnet validation evidence exists for `rebalance` and `updateFee` action generation.
+- The canonical workflow prepares `rebalance` payloads and can emit an `updateFee` sidecar payload from live volatility analysis.
 
 ### Next Milestone
 
@@ -43,8 +43,8 @@ Operator / local simulation
 liquidmind/agentic-liquidity
   |- Read live ETH/USD price from Chainlink (EVMClient)
   |- Read historical rounds for volatility
-  |- Compute fee and tick guidance
-  `- Emit rebalance/updateFee action payloads
+  |- Compute rebalance tick guidance
+  `- Emit rebalance payloads + optional updateFee sidecar
                     |
                     v
   Operator/test bridge submits payloads

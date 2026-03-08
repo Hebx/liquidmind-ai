@@ -12,7 +12,7 @@ This document intentionally separates the current development/test trigger path 
 
 - Real Chainlink price reads are working through `liquidmind/agentic-liquidity/src/utils/price-feed.ts`.
 - Historical round reads are used to compute volatility for fee selection.
-- The workflow package produces `rebalance` and `updateFee` action payloads for the Base Sepolia contracts already documented elsewhere in the repo.
+- The workflow package produces a canonical `rebalance` payload and may emit an `updateFee` sidecar payload from live volatility analysis for the Base Sepolia contracts already documented elsewhere in the repo.
 - The live truth today is Base Sepolia contract execution plus real Chainlink reads, not a fully deployed HTTP intent platform.
 
 ## Current Dev/Test Flow
@@ -50,7 +50,7 @@ Use this when you want the direct compile command behind `npm run validate:real`
 - The current development/test configuration includes a cron-style schedule in `liquidmind/agentic-liquidity/config.staging.json`.
 - Treat that scheduled trigger as the current development/test entrypoint for workflow compilation and payload generation.
 - Do not treat cron-only triggering as the final intended operator experience.
-- The canonical package currently emits action payloads; submission and live evidence for those payloads are still bridged by external operator/test flows.
+- The canonical package currently emits action payloads; `rebalance` is the primary output and `updateFee` is a volatility-driven sidecar when available. Submission and live evidence for those payloads are still bridged by external operator/test flows.
 
 ## Next Milestone
 

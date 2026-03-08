@@ -10,7 +10,7 @@ This directory, `liquidmind/agentic-liquidity`, is the active workflow path for 
 
 - Real Chainlink price reads are implemented through `src/utils/price-feed.ts`.
 - Historical round reads for volatility are implemented and used for fee selection.
-- The workflow computes `rebalance` and `updateFee` action payloads for the deployed Base Sepolia contracts.
+- The workflow computes a canonical `rebalance` action payload and may emit an `updateFee` sidecar payload from live volatility analysis for the deployed Base Sepolia contracts.
 - Base Sepolia contract execution is validated elsewhere in the repo through the coordinator and hook flows.
 
 ### Current Dev/Test Flow
@@ -76,7 +76,7 @@ The current package focuses on:
 1. Reading live ETH/USD data from Chainlink.
 2. Reading historical feed rounds to compute volatility.
 3. Mapping volatility and risk settings into fee and tick guidance.
-4. Producing action payloads for coordinator-driven `rebalance` and `updateFee` execution.
+4. Producing a coordinator-driven `rebalance` payload plus an optional `updateFee` sidecar when live volatility analysis succeeds.
 
 The package should not be read as evidence that A2A or `x402` execution is already part of the live milestone.
 

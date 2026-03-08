@@ -19,6 +19,8 @@
 - Modify: `docs/DEPLOYMENT.md`
 - Modify: `docs/DEPLOYMENT_STATUS.md`
 
+**Implementation note:** During execution, this task's scope broadened slightly to cover adjacent canonical-package docs, frontend copy, legacy `cre-workflow/` material, and workflow wording where those files still contradicted the approved source-of-truth story.
+
 **Intent:** Remove ambiguity between `liquidmind/` and `cre-workflow/` so the repo, docs, and scripts all point to the real workflow path used for this milestone.
 
 **Step 1: Write the failing documentation assertions**
