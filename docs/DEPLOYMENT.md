@@ -10,10 +10,11 @@ Use `liquidmind/agentic-liquidity` as the source of truth for the workflow in th
 
 - Foundry
 - Node.js 18+
+- Bun (`npm run validate:real` shells out to `bunx cre-compile`)
 - npm
 - A Base Sepolia RPC URL
-- A funded private key for testnet contract actions
-- Optional: CRE CLI if you want to compile or validate CRE artifacts locally
+- A funded Base Sepolia EOA for contract deployment and any on-chain submission checks
+- Optional: CRE CLI plus an authenticated session (`cre login`) if you want to run `cre workflow simulate` or prepare a real workflow deploy
 
 ## Environment Setup
 
@@ -39,30 +40,36 @@ Minimum required for the documented contract commands:
 Create `liquidmind/agentic-liquidity/.env` from the package example:
 
 ```bash
-cat > liquidmind/agentic-liquidity/.env <<'EOF'
-BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
-PRIVATE_KEY=0xYOUR_PRIVATE_KEY
-CRE_ETH_PRIVATE_KEY=0xYOUR_PRIVATE_KEY
-EOF
+cp liquidmind/agentic-liquidity/.env.example liquidmind/agentic-liquidity/.env
 ```
 
-Use this env file for local simulation and CRE-oriented validation work. It supports the current development flow; it does not mean the HTTP-triggered operator path is already live.
+Use this env file for package-local RPC-backed helpers and shared workflow preparation. The current `npm run validate:real` path only compiles `main.ts`; it does not deploy a workflow and does not require a CRE wallet.
+
+Important notes for the current package flow:
+
+- `BASE_SEPOLIA_RPC` is the key runtime input when the canonical HTTP/shared workflow path needs live market data.
+- `PRIVATE_KEY` is not required for `npm run validate:real`; it is only relevant if you reuse local wallet-based scripts outside the compile-only validation path.
+- Leave `CRE_ETH_PRIVATE_KEY` unset unless you intentionally need a wallet-authenticated CRE operation. The current CLI simulation flow in `e2e-live.sh` explicitly unsets stale CRE wallet globals because they can override normal CLI auth and break simulation.
 
 ### Frontend
 
-The frontend does not ship with an `.env.example`, so set the values it currently reads in `frontend/.env.local`:
+The frontend already ships with `frontend/.env.example`. Copy it to `frontend/.env.local` and fill in the values the current UI and server route actually read:
 
 ```bash
-cat > frontend/.env.local <<'EOF'
-NEXT_PUBLIC_BASE_SEPOLIA_RPC=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
-NEXT_PUBLIC_COORDINATOR_ADDRESS=0x268c2E3D23f5cDDAA0D0B40142053414cC05991b
-NEXT_PUBLIC_HOOK_ADDRESS=0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0
-NEXT_PUBLIC_SUBGRAPH_URL=https://YOUR_SUBGRAPH_URL
-NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=YOUR_PROJECT_ID
-EOF
+cp frontend/.env.example frontend/.env.local
 ```
 
-The frontend also accepts `BASE_SEPOLIA_RPC` server-side, but the `NEXT_PUBLIC_*` variables above are the clearest way to run the current UI locally.
+Required or commonly used frontend values:
+
+- `NEXT_PUBLIC_BASE_SEPOLIA_RPC`
+- `NEXT_PUBLIC_COORDINATOR_ADDRESS`
+- `NEXT_PUBLIC_HOOK_ADDRESS`
+- `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`
+- Optional: `NEXT_PUBLIC_SUBGRAPH_URL` for subgraph-backed activity panels
+- Required for the server-side `/api/intent` route: `INTENT_PARSER_API_URL` or `INTENT_PARSER_BASE_URL`, plus `INTENT_PARSER_API_KEY` and `INTENT_PARSER_MODEL`
+- Optional for `/api/intent`: `INTENT_PARSER_TIMEOUT_MS`
+
+The frontend route handlers also accept `BASE_SEPOLIA_RPC` server-side, but `NEXT_PUBLIC_BASE_SEPOLIA_RPC` is enough for the current local UI if you are comfortable exposing the same public RPC URL to the browser.
 
 ## Live Now
 
@@ -87,6 +94,8 @@ npm run validate:real
 
 Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still compiles for CRE execution. The canonical output is a `rebalance` payload, with an optional `updateFee` sidecar emitted when live volatility analysis succeeds.
 
+This command is compile-only validation. It does not deploy an HTTP-triggered workflow to Chainlink, does not provision secrets, and does not by itself prove the operator-facing intent path is live.
+
 If you need a compiled workflow artifact, run:
 
 ```bash
@@ -102,6 +111,18 @@ npm run validate:cre
 
 `npm run simulate:mock` remains available only for the legacy local-demo flow and should not be used as the primary validation command for the live milestone path.
 
+### CRE CLI simulation and future HTTP deployment prerequisites
+
+If you move beyond compile-only validation and want to use `cre workflow simulate` or prepare a real HTTP-triggered deploy, verify these prerequisites first:
+
+1. Install the CRE CLI and confirm your session is authenticated with `cre login` / `cre whoami`.
+2. Review `liquidmind/agentic-liquidity/workflow.yaml` to make sure you are targeting the intended `staging` or `production` config file.
+3. Review `liquidmind/agentic-liquidity/config.staging.json` or `config.production.json` before any real deploy. The checked-in `authorizedKeys` entry is the current repo/testnet key, not a generic production default.
+4. Replace `authorizedKeys` with the EVM public key(s) that should be allowed to call the workflow's HTTP trigger. Those keys gate the CRE HTTP entrypoint; they are not automatically inferred from `AGENT_PRIVATE_KEY` or your local `.env`.
+5. Keep stale root-level placeholders such as `CRE_GATEWAY_URL`, `CRE_WORKFLOW_ID`, and `CRE_API_KEY` out of your shell unless you have actually provisioned them. Placeholder globals can send the CLI down the wrong auth path and make simulation or deployment look healthier than it is.
+
+The repo currently documents compile and simulation readiness, not a proven live HTTP-triggered CRE deployment.
+
 ### Existing end-to-end script
 
 ```bash
@@ -109,7 +130,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-`AGENT_PRIVATE_KEY` should correspond to the test wallet you want the script to use. With that variable set, `e2e-live.sh` can prove the current submission bridge for the canonical `rebalance` action and the optional `updateFee` sidecar action. Without it, the script is only partial evidence and does not prove on-chain submission.
+`AGENT_PRIVATE_KEY` must be a funded Base Sepolia EOA that the deployed `LiquidMindCoordinator` already recognizes as an authorized agent. The deploy script registers the deployer as the first agent; any different wallet must be registered on-chain first. With that variable set, `e2e-live.sh` can prove the current submission bridge for the canonical `rebalance` action and the optional `updateFee` sidecar action. Without it, the script is only partial evidence and does not prove on-chain submission.
 
 ## Next Milestone
 

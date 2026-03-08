@@ -105,7 +105,8 @@ liquidmind-ai/
 
 - [Foundry](https://book.getfoundry.sh/getting-started/installation)
 - Node.js 18+
-- Optional: [CRE CLI](https://docs.chain.link/cre) if you want to compile the workflow locally
+- [Bun](https://bun.sh) because the canonical CRE package validation runs `bunx cre-compile`
+- Optional: [CRE CLI](https://docs.chain.link/cre) plus `cre login` if you want to run `cre workflow simulate` or experiment with future HTTP-triggered deploys
 
 ### Validate the CRE workflow package
 
@@ -116,6 +117,8 @@ npm run validate:real
 ```
 
 This is the canonical package-level validation path for the real CRE workflow entrypoint. It compiles `main.ts` to a CRE workflow artifact.
+
+It does not deploy an HTTP-triggered workflow or prove that the operator-facing intent path is live.
 
 If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package command, `npm run cre-compile` performs the same real-workflow validation step.
 
@@ -142,7 +145,7 @@ export AGENT_PRIVATE_KEY=<your-key>
 bash e2e-live.sh
 ```
 
-With `AGENT_PRIVATE_KEY` configured, this script validates the current milestone bridge end to end: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update submission. Without `AGENT_PRIVATE_KEY`, it is only partial evidence and does not prove the submission step.
+`AGENT_PRIVATE_KEY` must be a funded Base Sepolia EOA that the deployed `LiquidMindCoordinator` already recognizes as an authorized agent. With that key configured, this script validates the current milestone bridge end to end: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update submission. Without it, the script is only partial evidence and does not prove the submission step.
 
 ### Deploy contracts to Base Sepolia
 
