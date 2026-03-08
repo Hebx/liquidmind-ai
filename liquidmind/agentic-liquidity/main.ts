@@ -14,6 +14,12 @@
  */
 
 import { cre, handler, httpTrigger, type Runtime, Runner } from "@chainlink/cre-sdk";
+import {
+  CONTRACTS,
+  prepareCanonicalActions,
+  type PreparedFeeAction,
+  type PreparedHookAction,
+} from "./src/canonical-preparation";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
 import {
   DEFAULT_DEVELOPMENT_INTENT,
@@ -22,7 +28,7 @@ import {
   type LiquidityIntent,
   type LiquidityIntentPayload,
 } from "./src/lib/intent.js";
-import { encodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "viem";
+import type { Hex } from "viem";
 
 interface AgentConsensus {
   routeOptimizer: {
@@ -41,192 +47,14 @@ interface AgentConsensus {
   };
 }
 
-// ============ On-Chain Action Prep ============
-
-/** Base Sepolia deployed addresses */
-const CONTRACTS = {
-  HOOK:        "0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0" as Hex,
-  COORDINATOR: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b" as Hex,
-  POOL_MANAGER: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408" as Hex,
-  // Base Sepolia canonical token addresses
-  WETH: "0x4200000000000000000000000000000000000006" as Hex,
-  USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Hex,
-} as const;
-
-/** Convert a USD price to the approximate Uniswap v4 tick.
- *  tick = ln(price) / ln(1.0001)
- *  For USDC/WETH pool: price = USDC per WETH (i.e. ETH/USD)
- *  Since currency0 < currency1 by address order, if USDC < WETH in address space
- *  the pool price = WETH/USDC = 1/ETH_USD_price → tick is negative. */
-function priceToTick(usdPrice: number, isToken0Usdc: boolean): number {
-  const logBase = Math.log(1.0001);
-  if (isToken0Usdc) {
-    // token0=USDC, token1=WETH → sqrtPrice = sqrt(ETH/USDC price) = sqrt(1/usdPrice)
-    return Math.round(Math.log(1 / usdPrice) / logBase);
-  } else {
-    // token0=WETH, token1=USDC → sqrtPrice = sqrt(USDC/ETH price) = sqrt(usdPrice)
-    return Math.round(Math.log(usdPrice) / logBase);
-  }
-}
-
-/** Snap a tick to the nearest valid multiple of tickSpacing (rounding toward negative infinity) */
-function snapTick(tick: number, spacing: number): number {
-  const rem = ((tick % spacing) + spacing) % spacing; // positive remainder
-  return tick - rem;
-}
-
-/** Choose a half-range in tick units based on risk tolerance */
-function getHalfRange(riskTolerance: LiquidityIntent["riskTolerance"]): number {
-  if (riskTolerance === "low")    return 600;   // ~±6% price range
-  if (riskTolerance === "medium") return 1200;  // ~±12%
-  return 2400;                                  // ~±24% for high risk
-}
-
-/**
- * Build the calldata for Coordinator.executeLocalHookAction() that will
- * apply the CRE-computed rebalance tick bounds to the AgenticLiquidityHook.
- */
-function buildRebalanceCalldata(
-  tickLower: number,
-  tickUpper: number,
-  actionId: Hex
-): {
-  coordinatorCalldata: Hex;
-  tickLower: number;
-  tickUpper: number;
-  actionId: Hex;
-} {
-  const TICK_SPACING = 60;
-  const POOL_FEE = 3000;
-
-  // Encode PoolKey struct: (currency0, currency1, fee, tickSpacing, hooks)
-  const encodedPoolKey = encodeAbiParameters(
-    [{
-      type: "tuple",
-      components: [
-        { name: "currency0", type: "address" },
-        { name: "currency1", type: "address" },
-        { name: "fee",        type: "uint24"  },
-        { name: "tickSpacing",type: "int24"   },
-        { name: "hooks",      type: "address" },
-      ],
-    }],
-    [{
-      currency0:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.USDC : CONTRACTS.WETH,
-      currency1:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.WETH : CONTRACTS.USDC,
-      fee:         POOL_FEE,
-      tickSpacing: TICK_SPACING,
-      hooks:       CONTRACTS.HOOK,
-    }]
-  );
-
-  // Encode rebalance actionData: abi.encode(int24 tickLower, int24 tickUpper)
-  const actionData = encodeAbiParameters(
-    [{ name: "tickLower", type: "int24" }, { name: "tickUpper", type: "int24" }],
-    [tickLower, tickUpper]
-  );
-
-  // Full calldata for Coordinator.executeLocalHookAction(bytes32, string, bytes, bytes)
-  const coordinatorCalldata = encodeFunctionData({
-    abi: parseAbi([
-      "function executeLocalHookAction(bytes32 actionId, string actionType, bytes encodedKey, bytes actionData) returns (bool)"
-    ]),
-    functionName: "executeLocalHookAction",
-    args: [actionId, "rebalance", encodedPoolKey, actionData],
-  });
-
-  return { coordinatorCalldata, tickLower, tickUpper, actionId };
-}
-
-/**
- * Build calldata for Coordinator.executeLocalHookAction() that sets the
- * dynamic LP fee on the AgenticLiquidityHook based on live volatility.
- */
-function buildUpdateFeeCalldata(
-  newFee: number,
-  actionId: Hex
-): {
-  coordinatorCalldata: Hex;
-  newFee: number;
-  actionId: Hex;
-} {
-  const TICK_SPACING = 60;
-  const POOL_FEE = 3000;
-
-  const encodedPoolKey = encodeAbiParameters(
-    [{
-      type: "tuple",
-      components: [
-        { name: "currency0", type: "address" },
-        { name: "currency1", type: "address" },
-        { name: "fee",        type: "uint24"  },
-        { name: "tickSpacing",type: "int24"   },
-        { name: "hooks",      type: "address" },
-      ],
-    }],
-    [{
-      currency0:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.USDC : CONTRACTS.WETH,
-      currency1:   CONTRACTS.USDC < CONTRACTS.WETH ? CONTRACTS.WETH : CONTRACTS.USDC,
-      fee:         POOL_FEE,
-      tickSpacing: TICK_SPACING,
-      hooks:       CONTRACTS.HOOK,
-    }]
-  );
-
-  const actionData = encodeAbiParameters(
-    [{ name: "newFee", type: "uint24" }],
-    [newFee]
-  );
-
-  const coordinatorCalldata = encodeFunctionData({
-    abi: parseAbi([
-      "function executeLocalHookAction(bytes32 actionId, string actionType, bytes encodedKey, bytes actionData) returns (bool)"
-    ]),
-    functionName: "executeLocalHookAction",
-    args: [actionId, "updateFee", encodedPoolKey, actionData],
-  });
-
-  return { coordinatorCalldata, newFee, actionId };
-}
-
-/**
- * Map annualized volatility (%) to an optimal Uniswap v4 LP fee (in hundredths of a bip).
- *
- * Tiers:
- *   vol < 20%  → 500  (0.05%)  — stable-ish pair
- *   vol < 40%  → 3000 (0.30%)  — normal
- *   vol < 80%  → 5000 (0.50%)  — elevated
- *   vol < 120% → 8000 (0.80%)  — high
- *   vol ≥ 120% → 10000 (1.00%) — extreme
- */
-function volatilityToFee(annualizedVol: number): number {
-  if (annualizedVol < 20) return 500;
-  if (annualizedVol < 40) return 3000;
-  if (annualizedVol < 80) return 5000;
-  if (annualizedVol < 120) return 8000;
-  return 10000;
-}
-
 interface WorkflowState {
   intent: LiquidityIntent;
   consensus?: AgentConsensus;
   approved?: boolean;
   executionHash?: string;
   positionId?: string;
-  hookAction?: {
-    tickLower: number;
-    tickUpper: number;
-    actionId: Hex;
-    coordinatorCalldata: Hex;
-    coordinator: Hex;
-  };
-  feeAction?: {
-    newFee: number;
-    volatility: number;
-    actionId: Hex;
-    coordinatorCalldata: Hex;
-    coordinator: Hex;
-  };
+  hookAction?: PreparedHookAction;
+  feeAction?: PreparedFeeAction;
 }
 
 interface TransportWorkflowState extends Omit<WorkflowState, "intent"> {
@@ -256,62 +84,53 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
   console.log(`  Action: ${intent.action}`);
   console.log(`  Risk Tolerance: ${intent.riskTolerance}`);
 
-  // ─── Compute optimal tick range for the hook rebalance ───────────────────
-  // Determine token ordering in pool (lower address = currency0)
-  const isUsdcToken0 = CONTRACTS.USDC.toLowerCase() < CONTRACTS.WETH.toLowerCase();
-  const ethUsdPrice  = intent.tokenA.toUpperCase().includes("ETH") ? priceA : priceB;
-  const currentTick  = priceToTick(ethUsdPrice, isUsdcToken0);
-  const halfRange    = getHalfRange(intent.riskTolerance);
-  const TICK_SPACING = 60;
-  const tickLower    = snapTick(currentTick - halfRange, TICK_SPACING);
-  const tickUpper    = snapTick(currentTick + halfRange, TICK_SPACING);
-
-  console.log(`  ETH/USD price  : $${ethUsdPrice.toFixed(2)}`);
-  console.log(`  Approx tick    : ${currentTick}`);
-  console.log(`  Optimal range  : [${tickLower}, ${tickUpper}]  (±${halfRange} ticks)`);
-
-  // Build the calldata to send from e2e test to Coordinator.executeLocalHookAction()
-  const actionId = `0x${Date.now().toString(16).padStart(64, "0")}` as `0x${string}`;
-  const hookAction = buildRebalanceCalldata(tickLower, tickUpper, actionId);
-
-  console.log(`  ACTION_CALLDATA_COORDINATOR: ${CONTRACTS.COORDINATOR}`);
-  console.log(`  ACTION_CALLDATA: ${hookAction.coordinatorCalldata}`);
-  console.log(`  HOOK_TICK_LOWER: ${tickLower}`);
-  console.log(`  HOOK_TICK_UPPER: ${tickUpper}`);
-
   // ─── Milestone 2: Live Volatility → Dynamic Fee ──────────────────────────
-  let feeAction: WorkflowState["feeAction"];
+  let volatility: number | undefined;
   if (runtime) {
     try {
       const ethSymbol = intent.tokenA.toUpperCase().includes("ETH") ? intent.tokenA : intent.tokenB;
       const volResult = await priceFeed.getVolatility(ethSymbol, runtime, 5);
-
-      const optimalFee = volatilityToFee(volResult.volatility);
-      const feeActionId = `0x${(Date.now() + 1).toString(16).padStart(64, "0")}` as `0x${string}`;
-      const feeCalldata = buildUpdateFeeCalldata(optimalFee, feeActionId);
+      volatility = volResult.volatility;
 
       console.log(`  ─── Volatility Oracle ───────────────────────────`);
       console.log(`  VOLATILITY_ANNUALIZED: ${volResult.volatility}%`);
       console.log(`  VOLATILITY_ROUNDS_READ: ${volResult.roundsRead}`);
-      console.log(`  OPTIMAL_FEE: ${optimalFee} (${(optimalFee / 10000 * 100).toFixed(2)}%)`);
-      console.log(`  FEE_ACTION_CALLDATA: ${feeCalldata.coordinatorCalldata}`);
-
-      feeAction = {
-        ...feeCalldata,
-        volatility: volResult.volatility,
-        coordinator: CONTRACTS.COORDINATOR,
-      };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`  ⚠️  Volatility measurement failed: ${msg} — skipping fee update`);
     }
   }
 
+  const preparation = prepareCanonicalActions(intent, {
+    priceA,
+    priceB,
+    volatility,
+  });
+
+  console.log(`  ETH/USD price  : $${preparation.diagnostics.ethUsdPrice.toFixed(2)}`);
+  console.log(`  Approx tick    : ${preparation.diagnostics.currentTick}`);
+  console.log(
+    `  Optimal range  : [${preparation.hookAction.tickLower}, ${preparation.hookAction.tickUpper}]  ` +
+      `(±${preparation.diagnostics.halfRange} ticks)`,
+  );
+  console.log(`  ACTION_CALLDATA_COORDINATOR: ${CONTRACTS.COORDINATOR}`);
+  console.log(`  ACTION_CALLDATA: ${preparation.hookAction.coordinatorCalldata}`);
+  console.log(`  HOOK_TICK_LOWER: ${preparation.hookAction.tickLower}`);
+  console.log(`  HOOK_TICK_UPPER: ${preparation.hookAction.tickUpper}`);
+
+  if (preparation.feeAction) {
+    console.log(
+      `  OPTIMAL_FEE: ${preparation.feeAction.newFee} ` +
+        `(${((preparation.feeAction.newFee / 10000) * 100).toFixed(2)}%)`,
+    );
+    console.log(`  FEE_ACTION_CALLDATA: ${preparation.feeAction.coordinatorCalldata}`);
+  }
+
   return {
     ...state,
     intent,
-    hookAction: { ...hookAction, coordinator: CONTRACTS.COORDINATOR },
-    feeAction,
+    hookAction: preparation.hookAction,
+    feeAction: preparation.feeAction,
   };
 }
 

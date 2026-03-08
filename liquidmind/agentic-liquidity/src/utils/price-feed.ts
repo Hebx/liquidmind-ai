@@ -22,6 +22,12 @@ import {
   type Runtime,
 } from "@chainlink/cre-sdk";
 import { encodeFunctionData, decodeFunctionResult, zeroAddress, parseAbi } from "viem";
+import {
+  BASE_SEPOLIA_CHAIN_SELECTOR,
+  CHAINLINK_FEEDS_BASE_SEPOLIA,
+  TOKEN_ADDRESSES,
+  USD_STABLE_QUOTES,
+} from "../market-config";
 
 // ABI for Chainlink AggregatorV3Interface
 const AGGREGATOR_ABI = parseAbi([
@@ -29,29 +35,6 @@ const AGGREGATOR_ABI = parseAbi([
   "function getRoundData(uint80 _roundId) view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
   "function decimals() view returns (uint8)",
 ]);
-
-// Base Sepolia chain selector (from @chainlink/cre-sdk ClientCapability.SUPPORTED_CHAIN_SELECTORS)
-const BASE_SEPOLIA_CHAIN_SELECTOR = 10344971235874465080n;
-
-// Verified Chainlink feed addresses on Base Sepolia (8 decimals each)
-const CHAINLINK_FEEDS_BASE_SEPOLIA: Record<string, string> = {
-  ETH:  "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1", // ETH/USD
-  WETH: "0x4aDC67696bA383F43DD60A9e78F2C97Fbbfc7cb1", // WETH tracks ETH price
-  BTC:  "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298", // BTC/USD
-  WBTC: "0x0FB99723Aee6f420beAD13e6bBB79b7E6F034298", // WBTC tracks BTC price
-  LINK: "0xd30e2101a97dcbAeBCBC04F14C3f624E67A35165", // LINK/USD
-};
-
-// Token address → symbol mapping for Base Sepolia tokens
-const TOKEN_ADDRESSES: Record<string, string> = {
-  WETH: "0x4200000000000000000000000000000000000006", // Base Sepolia canonical WETH
-  USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e", // Base Sepolia USDC
-  LINK: "0xE4aB69C077896252FAFBD49EFD26B5D171A32410", // Base Sepolia LINK
-};
-
-// Supported USD quote assets for the current WETH/USDC-style path.
-// These intentionally resolve to 1 USD without a Chainlink lookup.
-const USD_STABLE_QUOTES = new Set(["USDC", "USDT", "DAI"]);
 
 // Fallback mock prices — only used when runtime is undefined (offline unit tests)
 const MOCK_PRICES: Record<string, number> = {

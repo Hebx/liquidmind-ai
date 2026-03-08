@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { IntentParserError } from "@/lib/intent-parser";
 
-import { createIntentErrorResponse, POST } from "./route.js";
+import { createIntentErrorResponse, handleIntentPost, POST } from "./route.js";
 
 test("createIntentErrorResponse preserves specific client messages for validation failures", () => {
   const response = createIntentErrorResponse(
@@ -73,7 +73,56 @@ test("POST returns BAD_REQUEST for malformed JSON bodies", async () => {
   });
 });
 
-test("POST returns prepared canonical workflow output instead of only echoing parsed intent", async () => {
+test("handleIntentPost returns prepared canonical workflow output instead of only echoing parsed intent", async () => {
+  const parsedIntent = {
+    action: "rebalance" as const,
+    tokenA: "WETH",
+    tokenB: "USDC",
+    amount: "1000000",
+    preferredChains: ["base-sepolia"],
+    riskTolerance: "medium" as const,
+    minYield: 5,
+  };
+  const response = await handleIntentPost(
+    new Request("http://localhost/api/intent", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+      }),
+    }),
+    {
+      parseIntent: async () => parsedIntent,
+      executeWorkflow: async (intent) => ({
+        status: "prepared",
+        intent,
+        hookAction: {
+          actionId: "0x1".padEnd(66, "0") as `0x${string}`,
+          coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+          coordinatorCalldata: "0xdeadbeef",
+          tickLower: -77220,
+          tickUpper: -74820,
+        },
+      }),
+    },
+  );
+
+  assert.equal(response.status, 200);
+
+  const body = await response.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.intent.amount, "1000000");
+  assert.equal(body.workflow.status, "prepared");
+  assert.equal(body.workflow.intent.amount, "1000000");
+  assert.equal(body.workflow.hookAction.coordinator, "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b");
+  assert.equal(body.workflow.hookAction.coordinatorCalldata, "0xdeadbeef");
+  assert.equal(body.workflow.hookAction.tickLower < body.workflow.hookAction.tickUpper, true);
+  assert.equal("feeAction" in body.workflow, false);
+});
+
+test("POST fails honestly when live canonical market data is unavailable", async () => {
   const previousEnv = {
     ...process.env,
   };
@@ -83,6 +132,8 @@ test("POST returns prepared canonical workflow output instead of only echoing pa
   process.env.INTENT_PARSER_API_KEY = "test-key";
   process.env.INTENT_PARSER_MODEL = "gpt-4.1-mini";
   delete process.env.INTENT_PARSER_TIMEOUT_MS;
+  delete process.env.BASE_SEPOLIA_RPC;
+  delete process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC;
 
   global.fetch = async () =>
     new Response(
@@ -124,18 +175,14 @@ test("POST returns prepared canonical workflow output instead of only echoing pa
       }),
     );
 
-    assert.equal(response.status, 200);
-
-    const body = await response.json();
-    assert.equal(body.ok, true);
-    assert.equal(body.intent.amount, "1000000");
-    assert.equal(body.workflow.status, "prepared");
-    assert.equal(body.workflow.intent.amount, "1000000");
-    assert.equal(body.workflow.hookAction.coordinator, "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b");
-    assert.equal(typeof body.workflow.hookAction.coordinatorCalldata, "string");
-    assert.match(body.workflow.hookAction.coordinatorCalldata, /^0x[a-fA-F0-9]+$/);
-    assert.equal(body.workflow.hookAction.tickLower < body.workflow.hookAction.tickUpper, true);
-    assert.equal("feeAction" in body.workflow, false);
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), {
+      ok: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Unexpected intent parsing failure.",
+      },
+    });
   } finally {
     process.env = previousEnv;
     global.fetch = previousFetch;
