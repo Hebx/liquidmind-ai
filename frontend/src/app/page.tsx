@@ -171,7 +171,7 @@ export default function Home() {
             <div key={i} className="flex items-center gap-8 px-8 text-xs font-mono text-text-secondary">
               <span>CHAINLINK CRE · REAL READS</span>
               <span>UNISWAP V4 HOOKS · DYNAMIC FEES</span>
-              <span>HTTP INTENT FLOW · NEXT MILESTONE</span>
+              <span>HTTP INTENT FLOW · LIVE PREPARATION</span>
               <span>BASE SEPOLIA · LIVE CONTRACTS</span>
             </div>
           ))}
@@ -188,8 +188,9 @@ export default function Home() {
               AUTOMATION
             </h1>
             <p className="text-lg text-text-secondary max-w-xl">
-              Live today: real Chainlink reads and Base Sepolia coordinator plus hook automation.
-              Next: HTTP intent intake and AI-assisted parsing for operator workflows.
+              Live today: real Chainlink reads, Base Sepolia coordinator plus hook automation, and HTTP
+              intent intake with AI parsing into prepared workflow output.
+              This route does not submit on-chain transactions from the dashboard.
             </p>
             <div className="flex flex-wrap gap-4">
               <button className="btn-brutal-primary">VIEW BASE STATUS</button>
@@ -204,7 +205,7 @@ export default function Home() {
                   { step: 'CHAINLINK READS', status: overview.ok ? 'READY' : 'SYNCING', color: 'text-lime' },
                   { step: 'COORDINATOR', status: overview.coordinatorDeployed ? 'LIVE' : 'OFFLINE', color: 'text-cyan' },
                   { step: 'HOOK', status: overview.hookDeployed ? 'LIVE' : 'OFFLINE', color: 'text-magenta' },
-                  { step: 'HTTP FLOW', status: 'NEXT', color: 'text-lime' },
+                  { step: 'HTTP FLOW', status: 'PREPARED', color: 'text-lime' },
                 ].map((s) => (
                   <div key={s.step} className="flex items-center justify-between border-[var(--border-thin)] border-border p-3">
                     <span className="text-xs font-mono text-text-secondary">{s.step}</span>
@@ -276,11 +277,11 @@ export default function Home() {
               </div>
               <div className="card-brutal">
                 <p className="text-[10px] font-mono text-text-muted uppercase">Intent Flow</p>
-                <p className="text-sm font-mono text-lime mt-2">HTTP INTENT FLOW (NEXT)</p>
+                <p className="text-sm font-mono text-lime mt-2">HTTP INTENT FLOW (LIVE)</p>
               </div>
               <div className="card-brutal">
                 <p className="text-[10px] font-mono text-text-muted uppercase">AI Parser</p>
-                <p className="text-sm font-mono text-magenta mt-2">UPCOMING</p>
+                <p className="text-sm font-mono text-magenta mt-2">LIVE · PREPARES OUTPUT</p>
               </div>
             </div>
 
