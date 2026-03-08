@@ -9,25 +9,18 @@
  * Notes:
  * - Real Chainlink price and historical round reads are part of the live path.
  * - The workflow may also emit an updateFee sidecar action from live volatility analysis.
- * - HTTP-triggered intent ingestion is the next milestone.
+ * - HTTP-triggered intent ingestion shares the same canonical payload shape as local simulation.
  * - A2A, x402, and broader cross-chain execution remain exploratory or deferred.
  */
 
-import { cre, type Runtime } from "@chainlink/cre-sdk";
-import { Runner } from "@chainlink/cre-sdk";
+import { cre, handler, httpTrigger, type Runtime, Runner } from "@chainlink/cre-sdk";
 import { PriceFeedUtil } from "./src/utils/price-feed.js";
+import {
+  DEFAULT_DEVELOPMENT_INTENT,
+  normalizeIntentInput,
+  type LiquidityIntent,
+} from "./src/lib/intent.js";
 import { encodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "viem";
-
-// Workflow configuration
-interface LiquidityIntent {
-  action: "rebalance";
-  tokenA: string;
-  tokenB: string;
-  amount: bigint;
-  preferredChains: string[];
-  riskTolerance: "low" | "medium" | "high";
-  minYield: number; // APY %
-}
 
 interface AgentConsensus {
   routeOptimizer: {
@@ -504,32 +497,50 @@ interface Config {
   httpTrigger?: { path: string; method: string };
 }
 
-// Cron-triggered canonical workflow path.
-// Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
-const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> => {
-  // Default demo intent for cron-triggered development/test runs.
-  // Keep this aligned with the current canonical scope: rebalance/updateFee payload prep.
-  const intent: LiquidityIntent = {
-    action: "rebalance",
-    tokenA: "WETH",
-    tokenB: "USDC",
-    amount: 1000000n,
-    preferredChains: ["base-sepolia"],
-    riskTolerance: "medium",
-    minYield: 5
-  };
+function resolveHttpIntentPayload(request: unknown): unknown {
+  if (request == null || typeof request !== "object" || Array.isArray(request)) {
+    return request;
+  }
+
+  const candidate = request as Record<string, unknown>;
+  return candidate.body ?? candidate.payload ?? candidate.intent ?? request;
+}
+
+async function runCanonicalWorkflow(
+  intentInput: unknown,
+  runtime?: Runtime<Config>,
+  options: { fallbackToDefault?: boolean } = {},
+): Promise<WorkflowState> {
+  const intent = normalizeIntentInput(intentInput, {
+    fallbackToDefault: options.fallbackToDefault,
+  });
 
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state, runtime);
   emitPreparedActionPayloads(state);
-
   return state;
-};
+}
+
+// HTTP-triggered canonical workflow path.
+// Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
+const onHttpTrigger = async (
+  runtime: Runtime<Config>,
+  request: unknown,
+): Promise<WorkflowState> => runCanonicalWorkflow(resolveHttpIntentPayload(request), runtime);
+
+// Cron-triggered development fallback path.
+const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =>
+  runCanonicalWorkflow(DEFAULT_DEVELOPMENT_INTENT, runtime, { fallbackToDefault: true });
 
 const initWorkflow = (config: Config) => {
   const cron = new cre.capabilities.CronCapability();
   const schedule = (config as { schedule?: string }).schedule ?? "*/30 * * * * *";
-  return [cre.handler(cron.trigger({ schedule }), onCronTrigger)];
+  const triggerConfig = config.httpTrigger ?? { path: "/intent", method: "POST" };
+
+  return [
+    handler(httpTrigger.trigger(triggerConfig), onHttpTrigger),
+    handler(cron.trigger({ schedule }), onCronTrigger),
+  ];
 };
 
 export async function main() {
@@ -539,7 +550,8 @@ export async function main() {
 
 // Workflow runner for local simulation only (not exported - Javy rejects exported fns with params)
 // This deeper flow is intentionally not part of the canonical onCronTrigger path.
-async function runLiquidityWorkflow(intent: LiquidityIntent): Promise<WorkflowState> {
+async function runLiquidityWorkflow(intentInput: unknown): Promise<WorkflowState> {
+  const intent = normalizeIntentInput(intentInput, { fallbackToDefault: true });
   let state: WorkflowState = { intent };
   state = await analyzeIntent(state); // no runtime → mock prices (local-only path)
   state = await coordinateAgents(state);
