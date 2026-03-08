@@ -73,6 +73,75 @@ test("POST returns BAD_REQUEST for malformed JSON bodies", async () => {
   });
 });
 
+test("POST returns prepared canonical workflow output instead of only echoing parsed intent", async () => {
+  const previousEnv = {
+    ...process.env,
+  };
+  const previousFetch = global.fetch;
+
+  process.env.INTENT_PARSER_API_URL = "https://example.com/v1/chat/completions";
+  process.env.INTENT_PARSER_API_KEY = "test-key";
+  process.env.INTENT_PARSER_MODEL = "gpt-4.1-mini";
+  delete process.env.INTENT_PARSER_TIMEOUT_MS;
+
+  global.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                action: "rebalance",
+                tokenA: "WETH",
+                tokenB: "USDC",
+                amount: "1000000",
+                preferredChains: ["base-sepolia"],
+                riskTolerance: "medium",
+                minYield: 5,
+              }),
+            },
+          },
+        ],
+      }),
+      {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      },
+    );
+
+  try {
+    const response = await POST(
+      new Request("http://localhost/api/intent", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          rawIntent: "rebalance weth/usdc on base sepolia with medium risk using 1000000 base units",
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 200);
+
+    const body = await response.json();
+    assert.equal(body.ok, true);
+    assert.equal(body.intent.amount, "1000000");
+    assert.equal(body.workflow.status, "prepared");
+    assert.equal(body.workflow.intent.amount, "1000000");
+    assert.equal(body.workflow.hookAction.coordinator, "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b");
+    assert.equal(typeof body.workflow.hookAction.coordinatorCalldata, "string");
+    assert.match(body.workflow.hookAction.coordinatorCalldata, /^0x[a-fA-F0-9]+$/);
+    assert.equal(body.workflow.hookAction.tickLower < body.workflow.hookAction.tickUpper, true);
+    assert.equal("feeAction" in body.workflow, false);
+  } finally {
+    process.env = previousEnv;
+    global.fetch = previousFetch;
+  }
+});
+
 test("POST returns sanitized config errors through the route handler", async () => {
   const previousEnv = {
     ...process.env,
