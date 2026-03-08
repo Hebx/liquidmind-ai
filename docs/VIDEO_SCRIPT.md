@@ -9,7 +9,7 @@
 
 ```bash
 cd liquidmind
-cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0
+bash ./simulate-agentic-liquidity.sh --non-interactive --trigger-index 1
 ```
 
 Highlight in output:

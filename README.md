@@ -64,8 +64,8 @@ The current source of truth for the CRE side of the project is `liquidmind/agent
 
 | Contract | Address |
 |----------|---------|
-| **AgenticLiquidityHook** | [`0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0`](https://sepolia.basescan.org/address/0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0) |
-| **LiquidMindCoordinator** | [`0x268c2E3D23f5cDDAA0D0B40142053414cC05991b`](https://sepolia.basescan.org/address/0x268c2E3D23f5cDDAA0D0B40142053414cC05991b) |
+| **AgenticLiquidityHook** | [`0xb08542f31D6C765F30365148ee5E906F941d18C0`](https://sepolia.basescan.org/address/0xb08542f31D6C765F30365148ee5E906F941d18C0) |
+| **LiquidMindCoordinator** | [`0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063`](https://sepolia.basescan.org/address/0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063) |
 | **PoolManager** (Uniswap v4) | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` |
 
 **Live pool:** USDC/WETH with dynamic fees, controlled by the deployed hook.
@@ -81,7 +81,7 @@ The current source of truth for the CRE side of the project is `liquidmind/agent
 | Rebalance signaling | Live on Base Sepolia | `RebalanceSignaled` event during swap activity |
 | Chainlink price reads | Live in CRE workflow execution | `liquidmind/agentic-liquidity/src/utils/price-feed.ts` |
 | Historical round reads | Live in CRE workflow execution | Volatility computation uses real feed history |
-| Coordinator action execution | Validated on testnet | `executeLocalHookAction("rebalance" | "updateFee")` |
+| Coordinator action execution | Validated on testnet | `executeLocalHookAction("rebalance" | "updateFee")` against the redeployed coordinator/hook pair |
 
 ---
 
@@ -105,22 +105,23 @@ liquidmind-ai/
 
 - [Foundry](https://book.getfoundry.sh/getting-started/installation)
 - Node.js 18+
-- [Bun](https://bun.sh) because the canonical CRE package validation runs `bunx cre-compile`
-- Optional: [CRE CLI](https://docs.chain.link/cre) plus `cre login` if you want to run `cre workflow simulate` or experiment with future HTTP-triggered deploys
+- [Bun](https://bun.sh) because CRE package setup still uses `bunx cre-setup`
+- Optional: [CRE CLI](https://docs.chain.link/cre) plus `cre login` if you want to run `cre workflow simulate` or complete the still-pending HTTP workflow deploy/activate steps
 
 ### Validate the CRE workflow package
 
 ```bash
+cp liquidmind/.env.example liquidmind/.env
 cd liquidmind/agentic-liquidity
 npm install
 npm run validate:real
 ```
 
-This is the canonical package-level validation path for the real CRE workflow entrypoint. It compiles `main.ts` to a CRE workflow artifact.
+This is the canonical package-level validation path for the real CRE workflow entrypoint. It runs a non-interactive CRE simulation against the canonical workflow from the `liquidmind` project root.
 
 It does not deploy an HTTP-triggered workflow or prove that the operator-facing intent path is live.
 
-If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package command, `npm run cre-compile` performs the same real-workflow validation step.
+If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package compile command, `npm run cre-compile` invokes the SDK's local compiler hook used by CRE workflow builds.
 
 ### Legacy local mock demo
 
@@ -161,7 +162,7 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 
 - The current execution path is contract deployment plus real CRE workflow compilation from `liquidmind/agentic-liquidity`.
 - The legacy mock demo remains available for local-only experimentation, but it is not the canonical validation path.
-- The next delivery is an HTTP-triggered intent flow for the CRE package.
+- The next delivery is the authenticated CRE HTTP workflow deployment and activation step, which is currently gated by CRE org deploy access and the required deploy-time RPC/key settings.
 - `x402`, real A2A coordination, and production cross-chain automation are intentionally out of scope for this milestone.
 
 ---

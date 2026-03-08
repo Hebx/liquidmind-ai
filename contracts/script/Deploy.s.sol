@@ -24,9 +24,12 @@ contract DeployLiquidMind is Script {
 
         // Deploy Hook with mined salt for v4 permissions (0x18C0):
         // AFTER_INITIALIZE | BEFORE_ADD_LIQUIDITY | BEFORE_SWAP | AFTER_SWAP
-        bytes32 salt = 0x0000000000000000000000000000000000000000000000000000000000000ab8;
+        bytes32 salt = 0x0000000000000000000000000000000000000000000000000000000000006479;
         address deployerAddress = vm.addr(deployerKey);
         AgenticLiquidityHook hook = new AgenticLiquidityHook{salt: salt}(IPoolManager(poolManager), deployerAddress);
+        if ((uint160(address(hook)) & 0x3FFF) != 0x18C0) {
+            revert("Hook permissions mismatch");
+        }
 
         // Wire hook ↔ coordinator
         hook.setAgentCoordinator(address(coordinator));

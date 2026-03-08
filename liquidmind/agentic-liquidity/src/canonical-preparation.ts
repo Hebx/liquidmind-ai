@@ -51,8 +51,8 @@ interface PrepareCanonicalActionsOptions {
 }
 
 export const CONTRACTS = {
-  HOOK: "0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0" as Hex,
-  COORDINATOR: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b" as Hex,
+  HOOK: "0xb08542f31D6C765F30365148ee5E906F941d18C0" as Hex,
+  COORDINATOR: "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063" as Hex,
   POOL_MANAGER: "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408" as Hex,
   WETH: "0x4200000000000000000000000000000000000006" as Hex,
   USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as Hex,
@@ -113,8 +113,11 @@ export function toCanonicalIntentWorkflowResult(
     status: "prepared",
     intent: toIntentPayload(intent),
     hookAction: preparation.hookAction,
-    feeAction: preparation.feeAction,
   };
+
+  if (preparation.feeAction) {
+    result.feeAction = preparation.feeAction;
+  }
 
   if (warnings && warnings.length > 0) {
     result.warnings = warnings;

@@ -13,7 +13,7 @@
  * - A2A, x402, and broader cross-chain execution remain exploratory or deferred.
  */
 
-import { cre, handler, httpTrigger, type Runtime, Runner } from "@chainlink/cre-sdk";
+import { cre, decodeJson, handler, type HTTPPayload, type Runtime, Runner } from "@chainlink/cre-sdk";
 import {
   type CanonicalWorkflowWarning,
   type PreparedFeeAction,
@@ -122,8 +122,8 @@ async function analyzeIntent(state: WorkflowState, runtime?: Runtime<Config>): P
     ...state,
     intent,
     hookAction: workflow.hookAction,
-    feeAction: workflow.feeAction,
-    warnings: workflow.warnings,
+    ...(workflow.feeAction ? { feeAction: workflow.feeAction } : {}),
+    ...(workflow.warnings && workflow.warnings.length > 0 ? { warnings: workflow.warnings } : {}),
   };
 }
 
@@ -318,7 +318,12 @@ function emitPreparedActionPayloads(state: WorkflowState): void {
 // Config type for workflow
 interface Config {
   schedule?: string;
-  httpTrigger?: { path: string; method: string };
+  httpTrigger?: {
+    authorizedKeys?: Array<{
+      type?: "KEY_TYPE_UNSPECIFIED" | "KEY_TYPE_ECDSA_EVM";
+      publicKey?: string;
+    }>;
+  };
 }
 
 async function runCanonicalWorkflow(
@@ -349,23 +354,26 @@ function toTransportWorkflowState(state: WorkflowState): TransportWorkflowState 
 // is the same shared HTTP entry surface used by the Next.js route.
 const onHttpTrigger = async (
   runtime: Runtime<Config>,
-  request: unknown,
+  request: HTTPPayload,
 ): Promise<TransportWorkflowState> =>
-  executeCanonicalHttpWorkflow(request, {
+  executeCanonicalHttpWorkflow(decodeJson(request.input), {
     marketDataReader: createCanonicalMarketDataReader(runtime),
   });
 
 // Cron-triggered development fallback path.
-const onCronTrigger = async (runtime: Runtime<Config>): Promise<WorkflowState> =>
-  runCanonicalWorkflow(DEFAULT_DEVELOPMENT_INTENT, runtime, { fallbackToDefault: true });
+const onCronTrigger = async (runtime: Runtime<Config>): Promise<TransportWorkflowState> =>
+  toTransportWorkflowState(
+    await runCanonicalWorkflow(DEFAULT_DEVELOPMENT_INTENT, runtime, { fallbackToDefault: true }),
+  );
 
 const initWorkflow = (config: Config) => {
   const cron = new cre.capabilities.CronCapability();
+  const http = new cre.capabilities.HTTPCapability();
   const schedule = (config as { schedule?: string }).schedule ?? "*/30 * * * * *";
-  const triggerConfig = config.httpTrigger ?? { path: "/intent", method: "POST" };
+  const triggerConfig = config.httpTrigger ?? {};
 
   return [
-    handler(httpTrigger.trigger(triggerConfig), onHttpTrigger),
+    handler(http.trigger(triggerConfig), onHttpTrigger),
     handler(cron.trigger({ schedule }), onCronTrigger),
   ];
 };

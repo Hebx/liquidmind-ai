@@ -13,10 +13,10 @@
 
 | Contract | Address | Verified |
 |----------|---------|----------|
-| **LiquidMindCoordinator** | `0x268c2E3D23f5cDDAA0D0B40142053414cC05991b` | Yes |
-| **AgenticLiquidityHook** | `0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0` | Yes |
-| **PoolModifyLiquidityTest** | `0xDcCe2F8543D13989De483b11F0eae9ba9cD38626` | - |
-| **PoolSwapTest** | `0x6c2e4d949609BAdEE9eB29A1F99baFFfef497480` | - |
+| **LiquidMindCoordinator** | `0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063` | Yes |
+| **AgenticLiquidityHook** | `0xb08542f31D6C765F30365148ee5E906F941d18C0` | Yes |
+| **PoolModifyLiquidityTest** | `0x0bd338fBfe5C3f5294d54489395bB6c2fadaB82B` | - |
+| **PoolSwapTest** | `0x15d0053E3055Df9cdaB8BE03EB4345174AE9BAC8` | - |
 
 **PoolManager (Uniswap v4):** `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408`
 
@@ -25,28 +25,29 @@
 - **Pair:** USDC/WETH
 - **Fee:** `DYNAMIC_FEE_FLAG` (`0x800000`) - hook controls fee via `beforeSwap`
 - **Tick spacing:** 60
-- **PoolId:** `0xf6bc640ca8176014c0ae5e3734845427d1c9a40b0fac3395e7a383dcd51f8743`
+- **PoolId:** `0x26bdc452b547f41f8b069199acb0491d49b2184bd1b7018b66e4057f91be132d`
 
 ### Live CRE evidence
 
 - Real Chainlink price reads are working through `liquidmind/agentic-liquidity`.
 - Historical round reads for volatility are working through `liquidmind/agentic-liquidity`.
 - Canonical `rebalance` payloads and volatility-driven `updateFee` sidecar payloads have validation evidence through simulation and testnet flows.
-- The hook and coordinator behavior are validated against deployed Base Sepolia contracts.
+- The live coordinator and hook wiring are validated on Base Sepolia; the `updateFee` fork test still overlays the merged local hook bytecode for semantic coverage rather than proving the exact deployed hook bytecode path end to end.
 
 ### On-chain hook state
 
 | Metric | Value |
 |--------|-------|
 | Dynamic fee (EMA) | 10000 (1.00% - max, due to test swap volatility) |
-| Config baseFee | 5000 (updated via CRE-driven action) |
-| Volatility EMA | 96,320 avg ticks |
-| Active position | [-77100, -74700] (workflow-computed) |
+| Config baseFee | 3000 |
+| Volatility EMA | 96,326 avg ticks |
+| Active position | [-76440, -75240] |
 | Coordinator LINK | 5.0 LINK |
 
 ## Next Milestone
 
 - HTTP-triggered intent ingestion into `liquidmind/agentic-liquidity`
+- CRE workflow deploy/activate after CRE deploy access approval and final deploy-time RPC/key configuration
 - Intent-to-coordinator execution flow as the primary operator path
 
 These items are the active next step, not something this status page claims is already live.

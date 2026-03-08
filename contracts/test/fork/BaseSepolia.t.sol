@@ -10,14 +10,15 @@ import {PoolId} from "v4-core/src/types/PoolId.sol";
 
 /**
  * @title BaseSepolia Fork Tests
- * @notice End-to-end tests that fork Base Sepolia and assert real on-chain state.
- *         No mocks - every call goes to the actual deployed contracts and
- *         live Chainlink price feeds.
+ * @notice Fork tests that assert live Base Sepolia wiring and feed availability.
+ *         Most calls hit the deployed contracts and live Chainlink feeds; the
+ *         updateFee path explicitly overlays the merged local hook bytecode to
+ *         exercise current repository semantics against live coordinator wiring.
  */
 contract BaseSepoliaForkTest is Test {
     // ── Deployed contracts (Base Sepolia) ─────────────────────────────────────
-    address constant COORDINATOR  = 0x268c2E3D23f5cDDAA0D0B40142053414cC05991b;
-    address constant HOOK         = 0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0;
+    address constant COORDINATOR  = 0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063;
+    address constant HOOK         = 0xb08542f31D6C765F30365148ee5E906F941d18C0;
     address constant POOL_MANAGER = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
     address constant LINK_TOKEN   = 0xE4aB69C077896252FAFBD49EFD26B5D171A32410;
     address constant DEPLOYER     = 0x46Ca9120Ea33E7AF921Db0a230831CB08AeB2910;

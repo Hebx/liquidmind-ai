@@ -10,7 +10,7 @@ Use `liquidmind/agentic-liquidity` as the source of truth for the workflow in th
 
 - Foundry
 - Node.js 18+
-- Bun (`npm run validate:real` shells out to `bunx cre-compile`)
+- Bun (still useful because `postinstall` runs `bunx cre-setup`)
 - npm
 - A Base Sepolia RPC URL
 - A funded Base Sepolia EOA for contract deployment and any on-chain submission checks
@@ -35,20 +35,20 @@ Minimum required for the documented contract commands:
 - `BASE_SEPOLIA_RPC`
 - `PRIVATE_KEY`
 
-### Canonical CRE package
+### Canonical CRE project and package
 
-Create `liquidmind/agentic-liquidity/.env` from the package example:
+Create `liquidmind/.env` from the CRE project example:
 
 ```bash
-cp liquidmind/agentic-liquidity/.env.example liquidmind/agentic-liquidity/.env
+cp liquidmind/.env.example liquidmind/.env
 ```
 
-Use this env file for package-local RPC-backed helpers and shared workflow preparation. The current `npm run validate:real` path only compiles `main.ts`; it does not deploy a workflow and does not require a CRE wallet.
+Use this env file for CRE project-level commands such as `cre workflow simulate` and `cre workflow deploy`. The current `npm run validate:real` path runs a non-interactive CRE simulation of the canonical workflow from the `liquidmind` project root; it does not deploy a workflow, but it does require a healthy CRE login session. The direct `npm run cre-compile` command still performs the compile step through the SDK's local `cre-compile` binary.
 
 Important notes for the current package flow:
 
 - `BASE_SEPOLIA_RPC` is the key runtime input when the canonical HTTP/shared workflow path needs live market data.
-- `PRIVATE_KEY` is not required for `npm run validate:real`; it is only relevant if you reuse local wallet-based scripts outside the compile-only validation path.
+- `PRIVATE_KEY` is not required for `npm run validate:real`; it is only relevant if you reuse local wallet-based scripts outside the simulation-only validation path.
 - Leave `CRE_ETH_PRIVATE_KEY` unset unless you intentionally need a wallet-authenticated CRE operation. The current CLI simulation flow in `e2e-live.sh` explicitly unsets stale CRE wallet globals because they can override normal CLI auth and break simulation.
 
 ### Frontend
@@ -92,11 +92,11 @@ npm install
 npm run validate:real
 ```
 
-Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still compiles for CRE execution. The canonical output is a `rebalance` payload, with an optional `updateFee` sidecar emitted when live volatility analysis succeeds.
+Use this package to validate the real CRE workflow entrypoint and confirm that `main.ts` still executes under the CRE runtime through a non-interactive simulation. The canonical output is a `rebalance` payload, with an optional `updateFee` sidecar emitted when live volatility analysis succeeds.
 
-This command is compile-only validation. It does not deploy an HTTP-triggered workflow to Chainlink, does not provision secrets, and does not by itself prove the operator-facing intent path is live.
+This command is simulation-only validation. It does not deploy an HTTP-triggered workflow to Chainlink, does not provision secrets, and does not by itself prove the operator-facing intent path is live.
 
-If you need a compiled workflow artifact, run:
+If you need the direct package compile command, run:
 
 ```bash
 cd liquidmind/agentic-liquidity
@@ -113,7 +113,7 @@ npm run validate:cre
 
 ### CRE CLI simulation and future HTTP deployment prerequisites
 
-If you move beyond compile-only validation and want to use `cre workflow simulate` or prepare a real HTTP-triggered deploy, verify these prerequisites first:
+If you move beyond the package compile step and want to use `cre workflow simulate` or prepare a real HTTP-triggered deploy, verify these prerequisites first:
 
 1. Install the CRE CLI and confirm your session is authenticated with `cre login` / `cre whoami`.
 2. Review `liquidmind/agentic-liquidity/workflow.yaml` to make sure you are targeting the intended `staging` or `production` config file.

@@ -17,7 +17,7 @@ This directory, `liquidmind/agentic-liquidity`, is the active workflow path for 
 
 - Local development and testing use this package directly.
 - `npm run validate:real` is the canonical package-level validation path for the real CRE workflow entrypoint.
-- `npm run cre-compile` is the direct compile command behind that real-workflow validation path.
+- `npm run cre-compile` is the direct compile command used by CRE workflow builds.
 - `npm run simulate:mock` remains available only for legacy local demo output.
 - Cron-style scheduling is part of the current simulation and configuration path for development, not the final operator-facing architecture.
 
@@ -45,6 +45,7 @@ npm install
 ### Validate the Real CRE Workflow Entry Point
 
 ```bash
+cp ../.env.example ../.env
 cd liquidmind/agentic-liquidity
 npm run validate:real
 ```
@@ -67,7 +68,7 @@ cd liquidmind/agentic-liquidity
 npm run cre-compile
 ```
 
-This compiles `main.ts` to a CRE workflow artifact for further validation.
+This compiles the workflow entrypoint with the SDK's local `cre-compile` binary.
 
 ## Current Workflow Shape
 

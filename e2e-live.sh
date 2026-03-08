@@ -22,8 +22,8 @@ fi
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 RPC_URL="${BASE_SEPOLIA_RPC:?Set BASE_SEPOLIA_RPC in .env}"
-COORDINATOR="0x268c2E3D23f5cDDAA0D0B40142053414cC05991b"
-HOOK="0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0"
+COORDINATOR="${LIQUIDMIND_COORDINATOR_ADDRESS:-0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063}"
+HOOK="${LIQUIDMIND_HOOK_ADDRESS:-0xb08542f31D6C765F30365148ee5E906F941d18C0}"
 POOL_MANAGER="0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408"
 LINK_TOKEN="0xE4aB69C077896252FAFBD49EFD26B5D171A32410"
 
@@ -140,7 +140,7 @@ fi
 
 # ── STEP 4: CRE workflow simulation (live EVMClient → Chainlink feeds) ─────────
 echo -e "\n${YELLOW}[4/7] Running CRE Workflow Simulation (Base Sepolia Chainlink feeds live)...${NC}"
-echo -e "  ${CYAN}cre workflow simulate agentic-liquidity --target staging --trigger-index 0${NC}\n"
+echo -e "  ${CYAN}bash ./simulate-agentic-liquidity.sh --non-interactive --trigger-index 1${NC}\n"
 
 # Unset placeholder CRE env vars exported from root .env — these override CRE's internal
 # config and either point to a non-existent gateway (causing hangs) or break auth.
@@ -156,8 +156,8 @@ cre whoami > /dev/null 2>&1 && echo -e "  ${GREEN}CRE session active${NC}" \
   || { fail "CRE not logged in — run 'cre login' first"; }
 
 SIMULATE_LOG="/tmp/liquidmind-cre-sim-$$.txt"
-(cd liquidmind && timeout 90 cre workflow simulate agentic-liquidity \
-  --target staging --non-interactive --trigger-index 0 2>&1) > "$SIMULATE_LOG" || true
+(cd liquidmind && timeout 90 bash ./simulate-agentic-liquidity.sh \
+  --non-interactive --trigger-index 1 2>&1) > "$SIMULATE_LOG" || true
 cat "$SIMULATE_LOG"
 
 # Check the output contains a live price (not the old "$3200" mock)
@@ -196,13 +196,13 @@ fi
 echo -e "\n${YELLOW}[6/7] CRE → Hook: executeLocalHookAction (rebalance with live ticks)...${NC}"
 echo -e "  ${CYAN}Coordinator.executeLocalHookAction() ← tick range from Chainlink price${NC}\n"
 
-COORDINATOR="0x268c2E3D23f5cDDAA0D0B40142053414cC05991b"
-HOOK="0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0"
+COORDINATOR="${LIQUIDMIND_COORDINATOR_ADDRESS:-0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063}"
+HOOK="${LIQUIDMIND_HOOK_ADDRESS:-0xb08542f31D6C765F30365148ee5E906F941d18C0}"
 
 # Re-run the simulation to capture tick output (or re-use previous log if still fresh)
 LOOP_LOG="/tmp/liquidmind-loop-$$.txt"
-(cd liquidmind && timeout 90 cre workflow simulate agentic-liquidity \
-  --target staging --non-interactive --trigger-index 0 2>&1) > "$LOOP_LOG" || true
+(cd liquidmind && timeout 90 bash ./simulate-agentic-liquidity.sh \
+  --non-interactive --trigger-index 1 2>&1) > "$LOOP_LOG" || true
 
 TICK_LOWER=$(grep "HOOK_ACTION_TICK_LOWER=" "$LOOP_LOG" | tail -1 | cut -d= -f2 | tr -d ' ')
 TICK_UPPER=$(grep "HOOK_ACTION_TICK_UPPER=" "$LOOP_LOG" | tail -1 | cut -d= -f2 | tr -d ' ')
@@ -233,9 +233,9 @@ else
     # Generate unique action ID for this e2e run
     ACTION_ID=$(cast keccak "e2e-live-$(date +%s)")
 
-    # Encode PoolKey as bytes (USDC < WETH by address, fee=3000, spacing=60, hooks=HOOK)
+    # Encode PoolKey as bytes for the live dynamic-fee pool.
     ENCODED_KEY=$(cast abi-encode "f((address,address,uint24,int24,address))" \
-      "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,3000,60,$HOOK)" 2>/dev/null)
+      "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,8388608,60,$HOOK)" 2>/dev/null)
 
     # Encode action data: abi.encode(int24 tickLower, int24 tickUpper)
     ACTION_DATA=$(cast abi-encode "f(int24,int24)" -- "$TICK_LOWER" "$TICK_UPPER" 2>/dev/null)
@@ -268,7 +268,7 @@ echo -e "  ${CYAN}Coordinator.executeLocalHookAction(updateFee) ← volatility f
 # Compute PoolId = keccak256(abi.encode(PoolKey))
 if [ -n "${AGENT_PRIVATE_KEY:-}" ]; then
   POOL_KEY_ENCODED=$(cast abi-encode "f((address,address,uint24,int24,address))" \
-    "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,3000,60,$HOOK)" 2>/dev/null)
+    "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,8388608,60,$HOOK)" 2>/dev/null)
   POOL_ID=$(cast keccak "$POOL_KEY_ENCODED")
 
   # Check if pool config is already set (baseFee > 0)
@@ -295,8 +295,8 @@ FEE_LOG="/tmp/liquidmind-fee-$$.txt"
 if [ -f "$LOOP_LOG" ] && grep -q "FEE_ACTION_CALLDATA=" "$LOOP_LOG" 2>/dev/null; then
   cp "$LOOP_LOG" "$FEE_LOG"
 else
-  (cd liquidmind && timeout 90 cre workflow simulate agentic-liquidity \
-    --target staging --non-interactive --trigger-index 0 2>&1) > "$FEE_LOG" || true
+  (cd liquidmind && timeout 90 bash ./simulate-agentic-liquidity.sh \
+    --non-interactive --trigger-index 1 2>&1) > "$FEE_LOG" || true
 fi
 
 FEE_VOLATILITY=$(grep "FEE_ACTION_VOLATILITY=" "$FEE_LOG" | tail -1 | cut -d= -f2 | tr -d ' ')
@@ -318,7 +318,7 @@ else
 
     # Same PoolKey encoding
     FEE_ENCODED_KEY=$(cast abi-encode "f((address,address,uint24,int24,address))" \
-      "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,3000,60,$HOOK)" 2>/dev/null)
+      "(0x036CbD53842c5426634e7929541eC2318f3dCF7e,0x4200000000000000000000000000000000000006,8388608,60,$HOOK)" 2>/dev/null)
 
     # actionData: abi.encode(uint24 newFee)
     FEE_ACTION_DATA=$(cast abi-encode "f(uint24)" "$FEE_NEW" 2>/dev/null)

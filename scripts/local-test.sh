@@ -21,7 +21,7 @@ echo -e "${GREEN}✅ Contract tests passed${NC}"
 
 # 2. CRE workflow simulate
 echo -e "\n${YELLOW}[2/4] Running CRE workflow simulate...${NC}"
-cd liquidmind && cre workflow simulate agentic-liquidity --target staging --non-interactive --trigger-index 0 && cd ..
+cd liquidmind && bash ./simulate-agentic-liquidity.sh --non-interactive --trigger-index 1 && cd ..
 echo -e "${GREEN}✅ CRE simulate passed${NC}"
 
 # 3. E2E live (Base Sepolia verification + mock workflow)
