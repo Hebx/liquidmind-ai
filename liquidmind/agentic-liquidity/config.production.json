@@ -1,7 +1,5 @@
 {
   "httpTrigger": {
-    "path": "/intent",
-    "method": "POST",
     "authorizedKeys": [
       {
         "type": "KEY_TYPE_ECDSA_EVM",

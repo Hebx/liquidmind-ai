@@ -9,7 +9,7 @@
   "instances": [
     {
       "abi": "LiquidMindCoordinator",
-      "address": "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+      "address": "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063",
       "startBlock": 1,
       "chain": "base-sepolia"
     }

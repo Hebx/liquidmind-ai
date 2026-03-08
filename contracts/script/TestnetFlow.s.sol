@@ -30,7 +30,6 @@ contract TestnetFlow is Script {
     using StateLibrary for IPoolManager;
 
     address constant POOL_MANAGER = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
-    address constant HOOK         = 0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0;
     address constant USDC_ADDR    = 0x036CbD53842c5426634e7929541eC2318f3dCF7e;
     address constant WETH_ADDR    = 0x4200000000000000000000000000000000000006;
 
@@ -39,8 +38,10 @@ contract TestnetFlow is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
+        address hookAddress = vm.envAddress("HOOK_ADDRESS");
 
         console2.log("Deployer:", deployer);
+        console2.log("Hook:", hookAddress);
         console2.log("WETH balance:", IERC20(WETH_ADDR).balanceOf(deployer));
         console2.log("USDC balance:", IERC20(USDC_ADDR).balanceOf(deployer));
 
@@ -62,7 +63,7 @@ contract TestnetFlow is Script {
             currency1: Currency.wrap(WETH_ADDR),
             fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: int24(60),
-            hooks: AgenticLiquidityHook(HOOK)
+            hooks: AgenticLiquidityHook(hookAddress)
         });
 
         // sqrtPriceX96 for ETH/USD ≈ $2000
@@ -93,8 +94,11 @@ contract TestnetFlow is Script {
         console2.log("PoolId:");
         console2.logBytes32(PoolId.unwrap(poolId));
 
-        pm.initialize(key, sqrtPriceX96);
-        console2.log("Pool initialized!");
+        try pm.initialize(key, sqrtPriceX96) {
+            console2.log("Pool initialized!");
+        } catch {
+            console2.log("Pool already initialized, continuing with existing state");
+        }
 
         // Verify hook seeded the config
         (, int24 currentTick,,) = pm.getSlot0(poolId);
@@ -116,11 +120,11 @@ contract TestnetFlow is Script {
         console2.log("Liquidity range tickLower:", tickLower);
         console2.log("Liquidity range tickUpper:", tickUpper);
 
-        // Tiny liquidity to fit 10 USDC + 0.01 WETH budget
+        // Tiny liquidity sized to fit the wallet's faucet-scale Base Sepolia balances.
         ModifyLiquidityParams memory liqParams = ModifyLiquidityParams({
             tickLower: tickLower,
             tickUpper: tickUpper,
-            liquidityDelta: int256(5e6),
+            liquidityDelta: int256(3e6),
             salt: bytes32(0)
         });
 
@@ -164,7 +168,7 @@ contract TestnetFlow is Script {
 
         // ── Step 7: Read hook state (view calls, no broadcast needed) ────
         console2.log("\n=== Step 7: Verify hook state ===");
-        AgenticLiquidityHook hook = AgenticLiquidityHook(HOOK);
+        AgenticLiquidityHook hook = AgenticLiquidityHook(hookAddress);
 
         uint24 dynFee = hook.getCurrentDynamicFee(poolId);
         console2.log("Dynamic fee:", dynFee);

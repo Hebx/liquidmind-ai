@@ -157,7 +157,7 @@ test("submits the raw intent, shows pending state, and renders prepared workflow
           },
           hookAction: {
             actionId: "0x1".padEnd(66, "0"),
-            coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+            coordinator: "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063",
             coordinatorCalldata: "0xdeadbeef",
             tickLower: -77220,
             tickUpper: -74820,

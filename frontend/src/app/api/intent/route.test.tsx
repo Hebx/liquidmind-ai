@@ -137,7 +137,7 @@ test("POST uses the default intent route dependencies", async () => {
     intent,
     hookAction: {
       actionId: "0x2".padEnd(66, "0") as `0x${string}`,
-      coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+      coordinator: "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063",
       coordinatorCalldata: "0xfeedface",
       tickLower: -70000,
       tickUpper: -68000,
@@ -182,7 +182,7 @@ test("POST uses the default intent route dependencies", async () => {
         },
         hookAction: {
           actionId: "0x2".padEnd(66, "0"),
-          coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+          coordinator: "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063",
           coordinatorCalldata: "0xfeedface",
           tickLower: -70000,
           tickUpper: -68000,
@@ -222,7 +222,7 @@ test("handleIntentPost returns prepared canonical workflow output instead of onl
         intent,
         hookAction: {
           actionId: "0x1".padEnd(66, "0") as `0x${string}`,
-          coordinator: "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b",
+          coordinator: "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063",
           coordinatorCalldata: "0xdeadbeef",
           tickLower: -77220,
           tickUpper: -74820,
@@ -238,7 +238,7 @@ test("handleIntentPost returns prepared canonical workflow output instead of onl
   assert.equal(body.intent.amount, "1000000");
   assert.equal(body.workflow.status, "prepared");
   assert.equal(body.workflow.intent.amount, "1000000");
-  assert.equal(body.workflow.hookAction.coordinator, "0x268c2E3D23f5cDDAA0D0B40142053414cC05991b");
+  assert.equal(body.workflow.hookAction.coordinator, "0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063");
   assert.equal(body.workflow.hookAction.coordinatorCalldata, "0xdeadbeef");
   assert.equal(body.workflow.hookAction.tickLower < body.workflow.hookAction.tickUpper, true);
   assert.equal("feeAction" in body.workflow, false);

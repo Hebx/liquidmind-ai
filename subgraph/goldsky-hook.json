@@ -7,7 +7,7 @@
   "instances": [
     {
       "abi": "AgenticLiquidityHook",
-      "address": "0xC28ed0595D42ec01A2F7546f39Cf27Ea798598C0",
+      "address": "0xb08542f31D6C765F30365148ee5E906F941d18C0",
       "startBlock": 1,
       "chain": "base-sepolia"
     }

@@ -6,8 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "cre-compile": "bunx cre-compile ./main.ts .cre_build_tmp.wasm",
-    "validate:real": "npm run cre-compile",
+    "cre-compile": "cre-compile ./main.ts ./.cre_build_tmp.wasm",
+    "validate:real": "bash ../simulate-agentic-liquidity.sh --non-interactive --trigger-index 1",
     "postinstall": "bunx cre-setup",
     "dev": "tsx src/agentic-liquidity.ts",
     "simulate": "npm run simulate:mock",
