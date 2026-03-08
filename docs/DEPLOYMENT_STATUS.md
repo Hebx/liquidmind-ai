@@ -60,5 +60,5 @@ These items are the active next step, not something this status page claims is a
 ## Test Evidence
 
 - **Fork tests:** 16/16 passing
-- **E2E suite:** 12/12 passing
+- **E2E suite:** 12/12 passing when `AGENT_PRIVATE_KEY` is set, which provides full submission evidence for rebalance and `updateFee`; without that key, the script is only partial evidence
 - **Testnet flow:** 12 confirmed on-chain transactions
