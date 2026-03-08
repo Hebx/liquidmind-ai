@@ -3,11 +3,13 @@
 #
 # Runs the live-read and contract-wiring checks against REAL Base Sepolia state.
 # Full submission proof only happens when AGENT_PRIVATE_KEY is set.
-#   1. Chainlink price feeds  (latestRoundData via cast)
-#   2. Deployed contracts     (coordinator / hook / pool-manager wiring)
-#   3. LINK balance           (coordinator treasury)
-#   4. CRE workflow simulate  (EVMClient reads live Chainlink feeds inside WASM)
-#   5. Contract fork tests    (forge --fork-url)
+#   1. Chainlink price feeds        (latestRoundData via cast)
+#   2. Deployed contracts           (coordinator / hook / pool-manager wiring)
+#   3. LINK balance                 (coordinator treasury)
+#   4. CRE workflow simulation      (EVMClient reads live Chainlink feeds inside WASM)
+#   5. Contract fork tests          (forge --fork-url)
+#   6. Rebalance submission bridge  (only if AGENT_PRIVATE_KEY is set)
+#   7. updateFee submission bridge  (only if AGENT_PRIVATE_KEY is set)
 #
 # Exit codes: 0 = all green, 1 = at least one failure
 

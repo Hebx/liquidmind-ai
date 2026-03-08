@@ -19,7 +19,7 @@ import { encodeFunctionData, encodeAbiParameters, parseAbi, type Hex } from "vie
 
 // Workflow configuration
 interface LiquidityIntent {
-  action: "deposit" | "withdraw" | "rebalance";
+  action: "rebalance";
   tokenA: string;
   tokenB: string;
   amount: bigint;

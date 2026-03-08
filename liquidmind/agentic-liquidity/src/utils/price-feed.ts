@@ -49,6 +49,10 @@ const TOKEN_ADDRESSES: Record<string, string> = {
   LINK: "0xE4aB69C077896252FAFBD49EFD26B5D171A32410", // Base Sepolia LINK
 };
 
+// Supported USD quote assets for the current WETH/USDC-style path.
+// These intentionally resolve to 1 USD without a Chainlink lookup.
+const USD_STABLE_QUOTES = new Set(["USDC", "USDT", "DAI"]);
+
 // Fallback mock prices — only used when runtime is undefined (offline unit tests)
 const MOCK_PRICES: Record<string, number> = {
   ETH:  2000.00,
@@ -92,6 +96,14 @@ export class PriceFeedUtil {
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       console.log(`  💰 Cache hit: ${symbol} = $${cached.price.toFixed(4)} (${cached.source})`);
       return cached.price;
+    }
+
+    if (USD_STABLE_QUOTES.has(symbol)) {
+      const stablePrice = 1.0;
+      const source = runtime ? "usd-stable-parity" : "mock-stable-parity";
+      this.cache[cacheKey] = { price: stablePrice, timestamp: Date.now(), source };
+      console.log(`  💵 Stable quote: ${symbol}/USD = $${stablePrice.toFixed(4)} (${source})`);
+      return stablePrice;
     }
 
     // Attempt on-chain read via CRE EVMClient
