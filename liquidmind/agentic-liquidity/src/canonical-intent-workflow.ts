@@ -18,6 +18,12 @@ interface CanonicalIntentWorkflowOptions {
   marketDataReader?: CanonicalMarketDataReader;
 }
 
+/**
+ * Shared canonical HTTP entry surface.
+ *
+ * Both the Next.js intent route and the CRE package's `onHttpTrigger` handler
+ * call this function so HTTP-triggered execution reuses one canonical boundary.
+ */
 export async function executeCanonicalHttpWorkflow(
   intentInput: unknown,
   options: CanonicalIntentWorkflowOptions = {},

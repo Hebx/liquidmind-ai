@@ -14,18 +14,20 @@ interface IntentRouteDependencies {
   executeWorkflow: typeof executeCanonicalHttpWorkflow;
 }
 
+// Shared route wiring: the Next API route must call the same canonical HTTP
+// workflow surface that the CRE package uses for its HTTP trigger handler.
 export const DEFAULT_INTENT_ROUTE_DEPENDENCIES: IntentRouteDependencies = {
   parseIntent: parseIntentWithModel,
   executeWorkflow: executeCanonicalHttpWorkflow,
 };
 
 export async function POST(request: Request) {
-  return handleIntentPost(request);
+  return handleIntentPost(request, DEFAULT_INTENT_ROUTE_DEPENDENCIES);
 }
 
 export async function handleIntentPost(
   request: Request,
-  dependencies: IntentRouteDependencies = DEFAULT_INTENT_ROUTE_DEPENDENCIES,
+  dependencies: IntentRouteDependencies,
 ) {
   let parsedIntentSuccessfully = false;
 

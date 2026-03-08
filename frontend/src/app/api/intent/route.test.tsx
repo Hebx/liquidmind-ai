@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { IntentParserError } from "@/lib/intent-parser";
+import { executeCanonicalHttpWorkflow } from "../../../../../liquidmind/agentic-liquidity/src/canonical-intent-workflow";
 
 import {
   createIntentErrorResponse,
@@ -76,6 +77,13 @@ test("POST returns BAD_REQUEST for malformed JSON bodies", async () => {
       message: "Request body must be valid JSON.",
     },
   });
+});
+
+test("default route workflow dependency points at the shared canonical HTTP entry surface", () => {
+  assert.equal(
+    DEFAULT_INTENT_ROUTE_DEPENDENCIES.executeWorkflow,
+    executeCanonicalHttpWorkflow,
+  );
 });
 
 test("POST uses the default intent route dependencies", async () => {

@@ -347,6 +347,8 @@ function toTransportWorkflowState(state: WorkflowState): TransportWorkflowState 
 
 // HTTP-triggered canonical workflow path.
 // Current honest scope: real Chainlink-backed analysis plus action payload preparation only.
+// This handler intentionally delegates to `executeCanonicalHttpWorkflow`, which
+// is the same shared HTTP entry surface used by the Next.js route.
 const onHttpTrigger = async (
   runtime: Runtime<Config>,
   request: unknown,
