@@ -60,3 +60,9 @@ coverage/
 .worktrees/
 .worktrees/
 simulation-output.txt
+
+# Local-only / personal docs (do not push)
+docs/VIDEO_SCRIPT.md
+docs/VIDEO_DEMO_SCRIPT_FULL.md
+docs/PROD_READINESS_REVIEW.md
+docs/plans/
