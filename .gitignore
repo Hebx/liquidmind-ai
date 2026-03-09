@@ -59,3 +59,4 @@ coverage/
 *.pid.lock
 .worktrees/
 .worktrees/
+simulation-output.txt
