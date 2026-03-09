@@ -26,12 +26,6 @@ LiquidMind currently has live Base Sepolia contracts plus a canonical CRE workfl
 - Turn those intents into coordinator calls for rebalance and fee updates.
 - Make the HTTP entrypoint the default execution path for operators and integrations.
 
-### Deferred
-
-- `x402`-based payment flows are not part of the live milestone.
-- Real A2A orchestration is not part of the live milestone.
-- Cross-chain or CCIP-driven automation should be treated as future work unless separately proven live.
-
 ---
 
 ## How It Works Right Now
@@ -56,7 +50,7 @@ liquidmind/agentic-liquidity
          AgenticLiquidityHook (Uniswap v4)
 ```
 
-The current source of truth for the CRE side of the project is `liquidmind/agentic-liquidity`. Today, that package emits action payloads and real Chainlink-derived outputs; the actual submission bridge and on-chain evidence path still live in external operator/test flows such as `e2e-live.sh`, not inside the canonical package itself. The older `cre-workflow/` directory may still exist in the repo as legacy material, but it is not the active implementation target for this milestone.
+The current source of truth for the CRE side of the project is `liquidmind/agentic-liquidity`. That package emits action payloads and real Chainlink-derived outputs; the actual submission bridge and on-chain evidence path live in external operator/test flows such as `e2e-live.sh`, not inside the canonical package itself.
 
 ---
 
@@ -137,15 +131,6 @@ Latest verified `npm run validate:real` result on `Main`:
 
 These values come from a successful non-interactive CRE simulation against live Base Sepolia reads, so the exact price, volatility, ticks, and action payload IDs will change across runs.
 
-### Legacy local mock demo
-
-```bash
-cd liquidmind/agentic-liquidity
-npm run simulate:mock
-```
-
-This runs the legacy local mock demo in `src/mock-workflow.ts`. It is useful for local UI or developer demos, but it is not evidence of the live milestone path.
-
 ### Run Fork Tests
 
 ```bash
@@ -178,7 +163,6 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 - The canonical CRE workflow now validates through non-interactive simulation from `liquidmind/agentic-liquidity` on `Main`.
 - The current operator proof path is `e2e-live.sh`, which becomes full submission evidence when `AGENT_PRIVATE_KEY` is set.
 - The next milestone is authenticated CRE HTTP workflow deploy/activate plus proof of the HTTP-triggered operator path, once CRE org deploy access is enabled.
-- The legacy mock demo remains available for local-only experimentation, but it is not the canonical milestone path.
 
 ---
 
