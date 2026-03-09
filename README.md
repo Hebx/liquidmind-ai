@@ -1,6 +1,6 @@
 # LIQUIDMIND
 
-**Autonomous liquidity infrastructure for Uniswap v4 on Base Sepolia**
+**Autonomous liquidity infrastructure for Uniswap v4**
 
 [![Chainlink CRE](https://img.shields.io/badge/Chainlink-CRE-375BD2)](https://docs.chain.link/cre)
 [![Uniswap v4](https://img.shields.io/badge/Uniswap-v4%20Hooks-FF007A)](https://docs.uniswap.org/contracts/v4)
