@@ -66,3 +66,6 @@ docs/VIDEO_SCRIPT.md
 docs/VIDEO_DEMO_SCRIPT_FULL.md
 docs/PROD_READINESS_REVIEW.md
 docs/plans/
+
+# Local-only (removed from repo; keep on disk)
+agents/

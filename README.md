@@ -92,7 +92,6 @@ liquidmind-ai/
 |- contracts/                            # Solidity contracts and scripts
 |- liquidmind/agentic-liquidity/         # Canonical CRE workflow package
 |- frontend/                             # Next.js dashboard
-|- agents/                               # Agent experiments / services
 |- subgraph/                             # Indexing
 `- docs/                                 # Milestone docs and status
 ```
