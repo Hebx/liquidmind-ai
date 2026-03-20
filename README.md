@@ -25,7 +25,6 @@ This **`README.md` is tailored for the Uniswap Hookathon** (v4 hook + tests + de
 
 LiquidMind is **autonomous liquidity** on **Uniswap v4**: a **Chainlink CRE** workflow reads **live feeds** and **historical rounds** on **Base Sepolia**, estimates **volatility**, and prepares **canonical actions** — **rebalance** (tick range + calldata) and optional **updateFee**. Only **`LiquidMindCoordinator`**, with **authorized agents**, may call **`executeAgentAction`** on **`AgenticLiquidityHook`**. The **hook** enforces **dynamic fees** (`beforeSwap`), **EMA volatility** and **rebalance signals** (`afterSwap`), optional **agent-only LP** (`beforeAddLiquidity`), and **gated** parameter updates — CRE plans; the hook **executes and enforces** on-chain.
 
-**Demo:** Record a **&lt; 5 minute** video: show `contracts/src/AgenticLiquidityHook.sol`, run **Foundry** tests below, optionally **Basescan** + `cast` reads. Official rubric: originality, execution, impact, functionality, presentation (see Hookathon LMS).
 
 ---
 
