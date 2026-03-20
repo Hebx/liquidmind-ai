@@ -7,7 +7,7 @@
 [![Base Sepolia](https://img.shields.io/badge/Network-Base%20Sepolia-0052FF)](https://sepolia.basescan.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-This **`README.md` is tailored for the Uniswap Hookathon** (v4 hook + tests + demo video). The codebase is aligned with **`Main`**; **Chainlink CRE live-readiness** experiments and related fixes also land on **`feature/cre-live-prod`** — merge `Main` first for the latest hook + contracts, then compare that branch if you care about CRE HTTP / simulation hardening.
+LiquidMind is **autonomous liquidity** on **Uniswap v4**: a **Chainlink CRE** workflow reads **live feeds** and **historical rounds** on **Base Sepolia**, estimates **volatility**, and prepares **canonical actions** — **rebalance** (tick range + calldata) and optional **updateFee**. Only **`LiquidMindCoordinator`**, with **authorized agents**, may call **`executeAgentAction`** on **`AgenticLiquidityHook`**. The **hook** enforces **dynamic fees** (`beforeSwap`), **EMA volatility** and **rebalance signals** (`afterSwap`), optional **agent-only LP** (`beforeAddLiquidity`), and **gated** parameter updates — CRE plans; the hook **executes and enforces** on-chain.
 
 ---
 
@@ -21,12 +21,6 @@ This **`README.md` is tailored for the Uniswap Hookathon** (v4 hook + tests + de
 
 ---
 
-## Hookathon pitch (60 seconds)
-
-LiquidMind is **autonomous liquidity** on **Uniswap v4**: a **Chainlink CRE** workflow reads **live feeds** and **historical rounds** on **Base Sepolia**, estimates **volatility**, and prepares **canonical actions** — **rebalance** (tick range + calldata) and optional **updateFee**. Only **`LiquidMindCoordinator`**, with **authorized agents**, may call **`executeAgentAction`** on **`AgenticLiquidityHook`**. The **hook** enforces **dynamic fees** (`beforeSwap`), **EMA volatility** and **rebalance signals** (`afterSwap`), optional **agent-only LP** (`beforeAddLiquidity`), and **gated** parameter updates — CRE plans; the hook **executes and enforces** on-chain.
-
-
----
 
 ## Architecture
 
@@ -185,4 +179,4 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 
 MIT — see [LICENSE](LICENSE).
 
-Built by **Hebx**. Uniswap Hookathon submission README; Chainlink Convergence Hackathon 2026 lineage. For **`Main`**-style neutral README, switch to the **`Main`** branch.
+Built by **Hebx**. Uniswap Hookathon submission README; Chainlink Convergence Hackathon 2026 lineage. For **`Main`** README, switch to the **`Main`** branch.
