@@ -1,107 +1,149 @@
 # LIQUIDMIND
 
-**Autonomous liquidity infrastructure for Uniswap v4**
+**Autonomous liquidity infrastructure for Uniswap v4 — Hookathon submission branch**
 
 [![Chainlink CRE](https://img.shields.io/badge/Chainlink-CRE-375BD2)](https://docs.chain.link/cre)
 [![Uniswap v4](https://img.shields.io/badge/Uniswap-v4%20Hooks-FF007A)](https://docs.uniswap.org/contracts/v4)
 [![Base Sepolia](https://img.shields.io/badge/Network-Base%20Sepolia-0052FF)](https://sepolia.basescan.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-LiquidMind currently has live Base Sepolia contracts plus a canonical CRE workflow package at `liquidmind/agentic-liquidity` that reads real Chainlink data, prepares a canonical `rebalance` action, and may emit an `updateFee` sidecar action from live volatility analysis. The next milestone is to trigger that workflow over HTTP and carry intent payloads through to on-chain execution.
+This **`README.md` is tailored for the Uniswap Hookathon** (v4 hook + tests + demo video). The codebase is aligned with **`Main`**; **Chainlink CRE live-readiness** experiments and related fixes also land on **`feature/cre-live-prod`** — merge `Main` first for the latest hook + contracts, then compare that branch if you care about CRE HTTP / simulation hardening.
 
 ---
 
-## Current Milestone
+## Branches at a glance
 
-### Live Today
-
-- `AgenticLiquidityHook` and `LiquidMindCoordinator` are deployed on Base Sepolia.
-- The hook updates EMA volatility, overrides swap fees, and signals rebalance conditions on-chain.
-- The CRE workflow in `liquidmind/agentic-liquidity` performs real Chainlink price and historical round reads.
-- The canonical workflow prepares `rebalance` payloads and can emit an `updateFee` sidecar payload from live volatility analysis.
-
-### Next Milestone
-
-- Accept external HTTP-triggered intents into the CRE workflow.
-- Turn those intents into coordinator calls for rebalance and fee updates.
-- Make the HTTP entrypoint the default execution path for operators and integrations.
+| Branch | Focus |
+|--------|--------|
+| **`Main`** | Canonical line: hook, coordinator, CRE package `liquidmind/agentic-liquidity`, docs. |
+| **`feature/hookathon-submission`** (or your hook PR branch) | Same code as `Main` at merge time; **README** here is **Hookathon-first** for judges. |
+| **`feature/cre-live-prod`** | CRE **live / prod-readiness** (simulation auth, pool keys, workflow alignment). Use it to see **CRE-side** deltas; the **on-chain hook** addresses here match `Main` unless you redeploy. |
 
 ---
 
-## How It Works Right Now
+## Hookathon pitch (60 seconds)
+
+LiquidMind is **autonomous liquidity** on **Uniswap v4**: a **Chainlink CRE** workflow reads **live feeds** and **historical rounds** on **Base Sepolia**, estimates **volatility**, and prepares **canonical actions** — **rebalance** (tick range + calldata) and optional **updateFee**. Only **`LiquidMindCoordinator`**, with **authorized agents**, may call **`executeAgentAction`** on **`AgenticLiquidityHook`**. The **hook** enforces **dynamic fees** (`beforeSwap`), **EMA volatility** and **rebalance signals** (`afterSwap`), optional **agent-only LP** (`beforeAddLiquidity`), and **gated** parameter updates — CRE plans; the hook **executes and enforces** on-chain.
+
+**Demo:** Record a **&lt; 5 minute** video: show `contracts/src/AgenticLiquidityHook.sol`, run **Foundry** tests below, optionally **Basescan** + `cast` reads. Official rubric: originality, execution, impact, functionality, presentation (see Hookathon LMS).
+
+---
+
+## Architecture
 
 ```text
-Operator / local simulation
-  |
-  v
-liquidmind/agentic-liquidity
-  |- Read live ETH/USD price from Chainlink (EVMClient)
-  |- Read historical rounds for volatility
-  |- Compute rebalance tick guidance
-  `- Emit rebalance payloads + optional updateFee sidecar
-                    |
-                    v
-  Operator/test bridge submits payloads
-                    |
-                    v
-        LiquidMindCoordinator (Base Sepolia)
-                    |
-                    v
-         AgenticLiquidityHook (Uniswap v4)
+Operator / automation
+        |
+        v
+liquidmind/agentic-liquidity  (Chainlink CRE)
+  |-- live price (e.g. WETH/USD on Base Sepolia)
+  |-- historical rounds -> volatility
+  '-- canonical payloads: rebalance + optional updateFee
+        |
+        v
+LiquidMindCoordinator (authorized agents)
+        |
+        v
+AgenticLiquidityHook (Uniswap v4)
 ```
 
-The current source of truth for the CRE side of the project is `liquidmind/agentic-liquidity`. That package emits action payloads and real Chainlink-derived outputs; the actual submission bridge and on-chain evidence path live in external operator/test flows such as `e2e-live.sh`, not inside the canonical package itself.
+The CRE package is the **planning** layer; the hook is the **on-chain authority** for fees, signals, and allowed state changes.
 
 ---
 
-## Deployed Contracts (Base Sepolia)
+## Partner integrations
+
+| Integration | Role |
+|-------------|------|
+| **Uniswap v4** | `AgenticLiquidityHook` — `afterInitialize`, `beforeAddLiquidity`, `beforeSwap`, `afterSwap`; dynamic fee pool. |
+| **Chainlink** | CRE workflow + **Data Feeds** (live + historical) in `liquidmind/agentic-liquidity`. |
+
+---
+
+## Deployed contracts (Base Sepolia, chain id 84532)
 
 | Contract | Address |
 |----------|---------|
 | **AgenticLiquidityHook** | [`0xb08542f31D6C765F30365148ee5E906F941d18C0`](https://sepolia.basescan.org/address/0xb08542f31D6C765F30365148ee5E906F941d18C0) |
 | **LiquidMindCoordinator** | [`0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063`](https://sepolia.basescan.org/address/0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063) |
-| **PoolManager** (Uniswap v4) | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` |
+| **PoolManager** (v4) | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` |
 
-**Live pool:** USDC/WETH with dynamic fees, controlled by the deployed hook.
+**Live pool:** USDC/WETH, dynamic fee (hook-controlled), tick spacing **60**.  
+**PoolId:** `0x26bdc452b547f41f8b069199acb0491d49b2184bd1b7018b66e4057f91be132d`
 
----
-
-## Live Functionality
-
-| Capability | Current state | Evidence |
-|-----------|---------------|----------|
-| Hook volatility tracking | Live on Base Sepolia | `afterSwap` updates EMA and emits volatility events |
-| Dynamic fee override | Live on Base Sepolia | `beforeSwap` returns hook-controlled fee tiers |
-| Rebalance signaling | Live on Base Sepolia | `RebalanceSignaled` event during swap activity |
-| Chainlink price reads | Live in CRE workflow execution | `liquidmind/agentic-liquidity/src/utils/price-feed.ts` |
-| Historical round reads | Live in CRE workflow execution | Volatility computation uses real feed history |
-| Coordinator action execution | Validated on testnet | `executeLocalHookAction("rebalance" | "updateFee")` against the redeployed coordinator/hook pair |
+More detail: [`docs/DEPLOYMENT_STATUS.md`](docs/DEPLOYMENT_STATUS.md).
 
 ---
 
-## Project Structure
+## Hook proof (Foundry) — eligibility-friendly
 
-```text
-liquidmind-ai/
-|- contracts/                            # Solidity contracts and scripts
-|- liquidmind/agentic-liquidity/         # Canonical CRE workflow package
-|- frontend/                             # Next.js dashboard
-|- subgraph/                             # Indexing
-`- docs/                                 # Milestone docs and status
+Hookathon requires **unit tests *or* a frontend**. Primary hook coverage:
+
+```bash
+cd contracts
+forge test --match-path test/AgenticLiquidityHook.t.sol -vv
+```
+
+**Expected:** **37** tests passed (`AgenticLiquidityHookTest`).
+
+Fork tests against Base Sepolia state (use `BASE_SEPOLIA_RPC` or public `https://sepolia.base.org`):
+
+```bash
+cd contracts
+forge test --fork-url https://sepolia.base.org --match-path "test/fork/*" -v
+```
+
+**Expected:** **16** tests passed (`BaseSepoliaForkTest`), including coordinator↔hook wiring and `executeLocalHookAction`.
+
+**Read-only on-chain checks:**
+
+```bash
+export HOOK=0xb08542f31D6C765F30365148ee5E906F941d18C0
+export POOL_ID=0x26bdc452b547f41f8b069199acb0491d49b2184bd1b7018b66e4057f91be132d
+export RPC=https://sepolia.base.org
+
+cast call "$HOOK" "getCurrentDynamicFee(bytes32)" "$POOL_ID" --rpc-url "$RPC"
+cast call "$HOOK" "agentCoordinator()" --rpc-url "$RPC"
+cast call "$HOOK" "getVolatilityAvgTicks(bytes32)" "$POOL_ID" --rpc-url "$RPC"
 ```
 
 ---
 
-## Quick Start
+## Live functionality
+
+| Capability | Notes |
+|------------|--------|
+| Dynamic fee override | `beforeSwap` — v4 dynamic fee flag |
+| Volatility EMA + events | `afterSwap` — `VolatilityUpdated` |
+| Rebalance signaling | `RebalanceSignaled` near range edge |
+| Agent / coordinator gate | `executeAgentAction` via coordinator only |
+| Agent-only LP (optional) | `beforeAddLiquidity` when enabled |
+
+---
+
+## Project structure
+
+```text
+liquidmind-ai/
+|- contracts/                    # AgenticLiquidityHook + Foundry tests
+|- liquidmind/agentic-liquidity/ # Chainlink CRE canonical workflow
+|- frontend/                     # Next.js (optional demo surface)
+|- subgraph/                     # Indexing
+`- docs/                         # Deployment status, milestones
+```
+
+---
+
+## Quick start (CRE + e2e)
 
 ### Prerequisites
 
 - [Foundry](https://book.getfoundry.sh/getting-started/installation)
 - Node.js 18+
-- [Bun](https://bun.sh) because CRE package setup still uses `bunx cre-setup`
-- Optional: [CRE CLI](https://docs.chain.link/cre) plus `cre login` if you want to run `cre workflow simulate` or complete the still-pending HTTP workflow deploy/activate steps
+- [Bun](https://bun.sh) for `bunx cre-setup` where needed
+- Optional: [CRE CLI](https://docs.chain.link/cre) + `cre login` for full simulation
 
-### Validate the CRE workflow package
+### Validate CRE workflow
 
 ```bash
 cp liquidmind/.env.example liquidmind/.env
@@ -110,44 +152,18 @@ npm install
 npm run validate:real
 ```
 
-This is the canonical package-level validation path for the real CRE workflow entrypoint. It runs a non-interactive CRE simulation against the canonical workflow from the `liquidmind` project root.
+Root helper: `npm run validate:cre` from repo root. For scripted simulation (see internal demo docs): from `liquidmind/`, `bash ./simulate-agentic-liquidity.sh --non-interactive --trigger-index 1` when CRE auth and RPC are configured.
 
-It does not deploy an HTTP-triggered workflow or prove that the operator-facing intent path is live.
-
-If you want the root-script equivalent, run `npm run validate:cre`. If you need the direct package compile command, `npm run cre-compile` invokes the SDK's local compiler hook used by CRE workflow builds.
-
-### Latest Simulation Result
-
-Latest verified `npm run validate:real` result on `Main`:
-
-- Status: passed
-- Date: `2026-03-08`
-- Live price source: Chainlink Base Sepolia `WETH/USD = $1974.4457`
-- Computed rebalance range: `tickLower = -77100`, `tickUpper = -74700`
-- Prepared coordinator: `0x68F321d6d33b23bAFC03CC4d84b1dBbe7cBFd063`
-- Prepared actions: canonical `rebalance` payload plus `updateFee` sidecar payload
-- Volatility sample: `35.46%` annualized
-- Prepared fee output: `3000`
-
-These values come from a successful non-interactive CRE simulation against live Base Sepolia reads, so the exact price, volatility, ticks, and action payload IDs will change across runs.
-
-### Run Fork Tests
+### E2E submission (authorized agent)
 
 ```bash
-cd contracts
-forge test --fork-url "$BASE_SEPOLIA_RPC" --match-path "test/fork/*" -v
-```
-
-### Run the end-to-end script
-
-```bash
-export AGENT_PRIVATE_KEY=<your-key>
+export AGENT_PRIVATE_KEY=<your-authorized-base-sepolia-key>
 bash e2e-live.sh
 ```
 
-`AGENT_PRIVATE_KEY` must be a funded Base Sepolia EOA that the deployed `LiquidMindCoordinator` already recognizes as an authorized agent. With that key configured, this script validates the current milestone bridge end to end: contract wiring, real Chainlink-backed workflow outputs, and on-chain rebalance or fee update submission. Without it, the script is only partial evidence and does not prove the submission step.
+Without the key, the script still exercises feed and wiring checks; with the key, it can submit **rebalance** / **updateFee** through the coordinator.
 
-### Deploy contracts to Base Sepolia
+### Deploy (fork / fresh testnet)
 
 ```bash
 cd contracts
@@ -157,17 +173,17 @@ forge script script/Deploy.s.sol:DeployLiquidMind --rpc-url "$BASE_SEPOLIA_RPC" 
 
 ---
 
-## Current Milestones
+## Roadmap (hook + agents)
 
-- Live Base Sepolia contract state is updated and documented around the redeployed hook and coordinator pair.
-- The canonical CRE workflow now validates through non-interactive simulation from `liquidmind/agentic-liquidity` on `Main`.
-- The current operator proof path is `e2e-live.sh`, which becomes full submission evidence when `AGENT_PRIVATE_KEY` is set.
-- The next milestone is authenticated CRE HTTP workflow deploy/activate plus proof of the HTTP-triggered operator path, once CRE org deploy access is enabled.
+- **HTTP-triggered CRE** — default operator entry for intents → coordinator → hook.  
+- **x402-style payment** — metered / agent-native triggers for workflow execution.  
+- **ERC-8004 alignment** — stronger on-chain **agent identity** with existing agent-only LP + coordinator allowlists.  
+- **Observability** — subgraph / UI on hook events; **A2A**-style orchestration above the canonical workflow.
 
 ---
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
-Built by **Hebx** for the Chainlink Convergence Hackathon 2026.
+Built by **Hebx**. Uniswap Hookathon submission README; Chainlink Convergence Hackathon 2026 lineage. For **`Main`**-style neutral README, switch to the **`Main`** branch.
